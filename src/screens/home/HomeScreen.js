@@ -179,7 +179,12 @@ const HomeScreen = () => {
       if (!sellerId) return { ...seller, topProducts: [] };
 
       const sellerProducts = products.filter(product => {
-        const productSellerId = product.seller?._id || product.seller?.id || product.sellerId || product.seller;
+        const productSellerId = product.seller?._id || 
+                               product.seller?.id || 
+                               product.sellerId || 
+                               product.seller ||
+                               product.sellerId?._id ||
+                               product.sellerId?.id;
         return productSellerId && (productSellerId.toString() === sellerId.toString() || productSellerId === sellerId);
       });
 
@@ -188,8 +193,22 @@ const HomeScreen = () => {
       }
 
       const sortedProducts = [...sellerProducts].sort((a, b) => {
-        const aSales = a.salesCount || a.totalOrders || a.ordersCount || 0;
-        const bSales = b.salesCount || b.totalOrders || b.ordersCount || 0;
+        const getSalesCount = (product) => {
+          return product.salesCount || 
+                 product.totalOrders || 
+                 product.ordersCount || 
+                 product.soldCount || 
+                 product.quantitySold || 
+                 product.purchases || 
+                 product.sales ||
+                 product.totalSales ||
+                 product.itemsSold ||
+                 (product.quantity && product.quantitySold ? product.quantity - product.quantitySold : 0) ||
+                 0;
+        };
+
+        const aSales = getSalesCount(a);
+        const bSales = getSalesCount(b);
         return bSales - aSales;
       });
 
