@@ -18,7 +18,9 @@ import useAuthHook from '../../hooks/useAuth';
 import { theme } from '../../theme';
 import AppButton from '../../components/AppButton';
 import AppInput from '../../components/AppInput';
-import LogoIcon from '../../components/header/LogoIcon';const TwoFactorSetupScreen = () => {
+import LogoIcon from '../../components/header/LogoIcon';
+
+const TwoFactorSetupScreen = () => {
   const navigation = useNavigation();
   const route = useRoute();
   const queryClient = useQueryClient();
@@ -27,7 +29,7 @@ import LogoIcon from '../../components/header/LogoIcon';const TwoFactorSetupScre
   const { qrCodeUrl, secret, backupCodes } = route.params || {};
 
   const qrCodeImageUrl = qrCodeUrl 
-    ? `https:
+    ? `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrCodeUrl)}`
     : null;
 
   const [verificationCode, setVerificationCode] = useState('');
@@ -99,15 +101,15 @@ import LogoIcon from '../../components/header/LogoIcon';const TwoFactorSetupScre
         onError: (error) => {
           const errorMessage =
             error?.response?.data?.message ||
-            error?.message 
+            error?.message ||
             'Invalid verification code. Please try again.';
           Alert.alert('Verification Failed', errorMessage);
         },
       });
     } catch (error) {
       const errorMessage =
-        error?.response?.data?.message 
-        error?.message 
+        error?.response?.data?.message ||
+        error?.message ||
         'Failed to verify code. Please try again.';
       Alert.alert('Error', errorMessage);
     } finally {
@@ -121,7 +123,6 @@ import LogoIcon from '../../components/header/LogoIcon';const TwoFactorSetupScre
   };
 
   const copySecret = () => {
-
     Alert.alert('Secret Key', `Your secret key: ${secret}\n\nCopy this manually if needed.`);
   };
 

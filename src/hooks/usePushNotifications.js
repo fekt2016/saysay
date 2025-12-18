@@ -1,3 +1,14 @@
+import React, { useState, useRef, useEffect } from 'react';
+import * as Notifications from 'expo-notifications';
+import * as Device from 'expo-device';
+import Constants from 'expo-constants';
+import { Platform } from 'react-native';
+import useAuth from './useAuth';
+import api from '../services/api';
+import logger from '../utils/logger';
+
+const EXPO_PROJECT_ID = Constants.expoConfig?.extra?.eas?.projectId || Constants.easConfig?.projectId;
+
 export const usePushNotifications = () => {
   const { user, isAuthenticated } = useAuth();
   const [expoPushToken, setExpoPushToken] = useState(null);
@@ -186,7 +197,7 @@ export const usePushNotifications = () => {
         logger.debug('[PushNotifications] 🔑 Requesting Expo push token (using default Expo project)');
       }
 
-      const tokenConfig = validProjectId ? { projectId: validProjectId } : ;
+      const tokenConfig = validProjectId ? { projectId: validProjectId } : {};
       const token = await Notifications.getExpoPushTokenAsync(tokenConfig);
 
       if (__DEV__) {

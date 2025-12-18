@@ -115,11 +115,11 @@ import { theme } from '../../theme';const ChangePasswordScreen = ({ navigation }
       onError: (error) => {
         const errorMessage =
           error?.response?.data?.message ||
-          error?.message 
+          error?.message ||
           'Failed to change password. Please try again.';
 
-        if (errorMessage.toLowerCase().includes('current password') 
-            errorMessage.toLowerCase().includes('incorrect password') 
+        if (errorMessage.toLowerCase().includes('current password') ||
+            errorMessage.toLowerCase().includes('incorrect password') ||
             errorMessage.toLowerCase().includes('wrong')) {
           setErrors({ passwordCurrent: errorMessage });
         } else {

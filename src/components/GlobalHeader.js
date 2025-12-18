@@ -1,15 +1,15 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { ActivityIndicator, FlatList, Image, Keyboard, Platform, Text, TextInput, TouchableOpacity, View, StyleSheet, Dimensions } from 'react-native';
+import { ActivityIndicator, FlatList, Image, Keyboard, Platform, Text, TextInput, TouchableOpacity, View, StyleSheet, Dimensions, Pressable } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../hooks/useAuth';
 import { useSearchSuggestions } from '../hooks/useSearchSuggestions';
-import { getSearchHistory, saveSearchToHistory, removeSearchFromHistory } from '../utils/searchHistory';
+import { getSearchHistory, saveSearchToHistory, removeSearchFromHistory, clearSearchHistory } from '../utils/searchHistory';
 import Logo from './Logo';
 import { theme } from '../theme';
 
-const { height: SCREEN_HEIGHT } = Dimensions.get('window');
+const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get('window');
 
 const GlobalHeader = ({ style }) => {
   const navigation = useNavigation();
@@ -22,11 +22,13 @@ const GlobalHeader = ({ style }) => {
   
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
-  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [isSearchOpen, setIsSearchOpen] = useState(false); // FIXED: Controlled dropdown state
   const [searchHistory, setSearchHistory] = useState([]);
   const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(-1);
+  const [isNavigating, setIsNavigating] = useState(false); // FIXED: Prevent double navigation
   const searchInputRef = useRef(null);
   const suggestionsRef = useRef(null);
+  const blurTimeoutRef = useRef(null); // FIXED: Manage blur timeout
 
   
   const calculateMaxHeight = useCallback((itemCount) => {
@@ -77,123 +79,168 @@ const GlobalHeader = ({ style }) => {
     loadSearchHistory();
   }, []);
 
-  
+  // FIXED: Close dropdown when navigating away from screen
+  useFocusEffect(
+    useCallback(() => {
+      return () => {
+        // Cleanup: close dropdown when screen loses focus
+        setIsSearchOpen(false);
+        if (blurTimeoutRef.current) {
+          clearTimeout(blurTimeoutRef.current);
+          blurTimeoutRef.current = null;
+        }
+      };
+    }, [])
+  );
+
   const loadSearchHistory = async () => {
-    const history = await getSearchHistory();
-    setSearchHistory(history);
+    try {
+      const history = await getSearchHistory();
+      setSearchHistory(history);
+    } catch (error) {
+      console.error('Error loading search history:', error);
+    }
   };
 
-  
-  const handleSearchChange = useCallback((text) => {
-    setSearchTerm(text);
-    setShowSuggestions(true);
+  // FIXED: Controlled dropdown open
+  const openDropdown = useCallback(() => {
+    setIsSearchOpen(true);
+    // Clear any pending blur timeout
+    if (blurTimeoutRef.current) {
+      clearTimeout(blurTimeoutRef.current);
+      blurTimeoutRef.current = null;
+    }
+  }, []);
+
+  // FIXED: Controlled dropdown close
+  const closeDropdown = useCallback(() => {
+    setIsSearchOpen(false);
     setActiveSuggestionIndex(-1);
   }, []);
 
   
-  const handleSearchSubmit = useCallback(async () => {
-    if (!searchTerm.trim()) return;
-
-    
-    await saveSearchToHistory(searchTerm.trim());
-    await loadSearchHistory();
-
-    
-    navigation.navigate('SearchTab', {
-      screen: 'Search',
-      params: { query: searchTerm.trim() },
-    });
-
-    
-    setShowSuggestions(false);
-    setSearchTerm('');
-    Keyboard.dismiss();
-  }, [searchTerm, navigation]);
+  const handleSearchChange = useCallback((text) => {
+    setSearchTerm(text);
+    openDropdown(); // FIXED: Open dropdown when typing
+    setActiveSuggestionIndex(-1);
+  }, [openDropdown]);
 
   
-  const handleSuggestionSelect = useCallback(
-    async (suggestion) => {
-      
-      const searchQuery = suggestion.text || suggestion;
+  const handleSearchSubmit = useCallback(async () => {
+    if (!searchTerm.trim() || isNavigating) return;
 
-      if (!searchQuery || !searchQuery.trim()) return;
-
-      setSearchTerm(searchQuery);
-      setShowSuggestions(false);
-
-      
-      await saveSearchToHistory(searchQuery);
+    try {
+      await saveSearchToHistory(searchTerm.trim());
       await loadSearchHistory();
 
-      
-      switch (suggestion.type) {
-        case 'product':
-          if (suggestion.data?._id) {
-            navigation.navigate('ProductDetail', {
-              productId: suggestion.data._id,
-              id: suggestion.data._id,
-            });
-          } else {
-            navigation.navigate('SearchTab', {
-              screen: 'Search',
-              params: { query: searchQuery, type: 'product' },
-            });
-          }
-          break;
-        case 'category':
-          navigation.navigate('SearchTab', {
-            screen: 'Search',
-            params: { query: searchQuery, type: 'category' },
-          });
-          break;
-        case 'brand':
-          navigation.navigate('SearchTab', {
-            screen: 'Search',
-            params: { query: searchQuery, type: 'brand' },
-          });
-          break;
-        case 'tag':
-          navigation.navigate('SearchTab', {
-            screen: 'Search',
-            params: { query: searchQuery, type: 'tag' },
-          });
-          break;
-        default:
-          
-          navigation.navigate('SearchTab', {
-            screen: 'Search',
-            params: { query: searchQuery },
-          });
+      navigation.navigate('SearchTab', {
+        screen: 'Search',
+        params: { query: searchTerm.trim() },
+      });
+
+      closeDropdown();
+      setSearchTerm('');
+      Keyboard.dismiss();
+    } catch (error) {
+      console.error('Error submitting search:', error);
+    }
+  }, [searchTerm, navigation, isNavigating, closeDropdown]);
+
+  
+  // FIXED: Proper navigation with double-click prevention
+  const handleSuggestionSelect = useCallback(
+    async (suggestion) => {
+      if (!suggestion || isNavigating) return; // FIXED: Prevent double navigation
+
+      const searchQuery = suggestion.text || suggestion;
+      if (!searchQuery || !searchQuery.trim()) return;
+
+      // FIXED: Set navigating flag to prevent double clicks
+      setIsNavigating(true);
+
+      // Clear blur timeout to prevent dropdown from closing
+      if (blurTimeoutRef.current) {
+        clearTimeout(blurTimeoutRef.current);
+        blurTimeoutRef.current = null;
       }
 
+      // Close dropdown immediately
+      closeDropdown();
+      setSearchTerm(searchQuery);
       Keyboard.dismiss();
+
+      try {
+        // Save to history
+        await saveSearchToHistory(searchQuery);
+        await loadSearchHistory();
+
+        // FIXED: Navigate based on suggestion type with proper product ID handling
+        if (suggestion.type === 'product') {
+          const productId = suggestion.data?._id || suggestion.data?.id || suggestion._id || suggestion.id;
+          if (productId) {
+            // Navigate to product detail using nested navigation
+            navigation.navigate('SearchTab', {
+              screen: 'ProductDetail',
+              params: {
+                productId: productId,
+                id: productId,
+              },
+            });
+            // Reset navigating flag after a delay
+            setTimeout(() => setIsNavigating(false), 500);
+            return;
+          }
+        }
+
+        // Navigate to search results for other types
+        navigation.navigate('SearchTab', {
+          screen: 'Search',
+          params: { 
+            query: searchQuery,
+            type: suggestion.type || undefined,
+          },
+        });
+        // Reset navigating flag after a delay
+        setTimeout(() => setIsNavigating(false), 500);
+      } catch (error) {
+        console.error('Error selecting suggestion:', error);
+        setIsNavigating(false);
+      }
     },
-    [navigation]
+    [navigation, isNavigating, closeDropdown]
   );
 
   
   const handleClearSearch = useCallback(() => {
     setSearchTerm('');
-    setShowSuggestions(false);
-    setActiveSuggestionIndex(-1);
+    closeDropdown();
     searchInputRef.current?.blur();
-  }, []);
+  }, [closeDropdown]);
 
   
+  // FIXED: Proper history deletion with immediate UI update
   const handleRemoveFromHistory = useCallback(
-    async (item, event) => {
-      event?.stopPropagation();
-      await removeSearchFromHistory(item);
-      await loadSearchHistory();
+    async (itemText) => {
+      // FIXED: Remove invalid stopPropagation - React Native doesn't support DOM events
+      try {
+        await removeSearchFromHistory(itemText);
+        await loadSearchHistory(); // FIXED: Reload to update UI immediately
+      } catch (error) {
+        console.error('Error removing from history:', error);
+      }
     },
     []
   );
 
   
+  // FIXED: Proper clear all history
   const handleClearHistory = useCallback(async () => {
-    const { clearSearchHistory } = await import('../utils/searchHistory');
-    await clearSearchHistory();
-    await loadSearchHistory();
+    try {
+      await clearSearchHistory();
+      await loadSearchHistory(); // FIXED: Reload to update UI immediately
+    } catch (error) {
+      console.error('Error clearing history:', error);
+    }
   }, []);
 
   
@@ -277,13 +324,21 @@ const GlobalHeader = ({ style }) => {
       else if (isTag) iconName = 'pricetag-outline';
 
       return (
-        <TouchableOpacity
-          style={[
+        <Pressable
+          style={({ pressed }) => [
             styles.suggestionItem,
             isActive && styles.suggestionItemActive,
+            pressed && styles.suggestionItemPressed, // FIXED: Visual feedback on press
           ]}
-          onPress={() => handleSuggestionSelect(item)}
-          activeOpacity={0.7}
+          onPress={() => {
+            // FIXED: Clear blur timeout and navigate
+            if (blurTimeoutRef.current) {
+              clearTimeout(blurTimeoutRef.current);
+              blurTimeoutRef.current = null;
+            }
+            handleSuggestionSelect(item);
+          }}
+          disabled={isNavigating} // FIXED: Disable during navigation
         >
           <View style={styles.suggestionItemLeft}>
             <View style={[
@@ -321,25 +376,26 @@ const GlobalHeader = ({ style }) => {
             </View>
           </View>
           {isHistory && itemText && (
-            <TouchableOpacity
+            <Pressable
               style={styles.deleteButton}
-              onPress={(e) => {
-                e.stopPropagation();
-                handleRemoveFromHistory(itemText, e);
+              onPress={() => {
+                // FIXED: Remove invalid stopPropagation - React Native doesn't support DOM events
+                handleRemoveFromHistory(itemText);
               }}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              onStartShouldSetResponder={() => true}
             >
               <Ionicons 
                 name="close-circle" 
                 size={20} 
                 color={theme.colors.textSecondary} 
               />
-            </TouchableOpacity>
+            </Pressable>
           )}
-        </TouchableOpacity>
+        </Pressable>
       );
     },
-    [activeSuggestionIndex, handleSuggestionSelect, handleRemoveFromHistory]
+    [activeSuggestionIndex, handleSuggestionSelect, handleRemoveFromHistory, isNavigating]
   );
 
   
@@ -399,10 +455,18 @@ const GlobalHeader = ({ style }) => {
     }
   };
 
-  
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (blurTimeoutRef.current) {
+        clearTimeout(blurTimeoutRef.current);
+      }
+    };
+  }, []);
+
   useEffect(() => {
     const keyboardDidHideListener = Keyboard.addListener('keyboardDidHide', () => {
-      
+      // Don't close suggestions on keyboard hide, let user interact
     });
 
     return () => {
@@ -452,7 +516,10 @@ const GlobalHeader = ({ style }) => {
         <SearchInputWrapper>
           <SearchInputContainer
             activeOpacity={1}
-            onPress={() => searchInputRef.current?.focus()}
+            onPress={() => {
+              searchInputRef.current?.focus();
+              openDropdown(); // FIXED: Open dropdown when clicking input wrapper
+            }}
           >
             <Ionicons name="search-outline" size={20} color={theme.colors.textSecondary} style={styles.searchIcon} />
             <SearchInputField
@@ -462,10 +529,19 @@ const GlobalHeader = ({ style }) => {
               value={searchTerm}
               onChangeText={handleSearchChange}
               onSubmitEditing={handleSearchSubmit}
-              onFocus={() => setShowSuggestions(true)}
+              onFocus={() => {
+                openDropdown(); // FIXED: Controlled open on focus
+              }}
               onBlur={() => {
-                
-                setTimeout(() => setShowSuggestions(false), 200);
+                // Clear any existing timeout
+                if (blurTimeoutRef.current) {
+                  clearTimeout(blurTimeoutRef.current);
+                }
+                // FIXED: Delayed close to allow item clicks
+                // Reduced delay for better responsiveness
+                blurTimeoutRef.current = setTimeout(() => {
+                  closeDropdown();
+                }, 150);
               }}
               returnKeyType="search"
               autoCorrect={false}
@@ -487,26 +563,41 @@ const GlobalHeader = ({ style }) => {
             )}
           </SearchInputContainer>
 
-          {}
-          {showSuggestions && (
-            <>
-              {suggestionsList.length > 0 ? (
-                <View style={[styles.suggestionsContainer, { maxHeight: calculateDropdownHeight }]}>
-                  {renderSuggestionsHeader()}
-                  <FlatList
-                    ref={suggestionsRef}
-                    data={suggestionsList}
-                    keyExtractor={(item, index) => item?.id || `item-${index}`}
-                    renderItem={renderSuggestionItem}
-                    keyboardShouldPersistTaps="handled"
-                    ListFooterComponent={renderSuggestionsFooter}
-                    scrollEnabled={suggestionsList.length > 5}
-                    nestedScrollEnabled={true}
-                    showsVerticalScrollIndicator={suggestionsList.length > 5}
-                  />
-                </View>
-              ) : debouncedSearchTerm && !isSearchProductsLoading && (
-                <View style={[styles.suggestionsContainer, { maxHeight: 200 }]}>
+          {/* FIXED: Backdrop overlay for outside-click detection */}
+          {isSearchOpen && (
+            <Pressable
+              style={styles.backdrop}
+              onPress={() => {
+                // FIXED: Close dropdown and blur input when clicking outside
+                searchInputRef.current?.blur();
+                closeDropdown();
+              }}
+            >
+              <View style={styles.backdropContent} pointerEvents="box-none">
+                {suggestionsList.length > 0 ? (
+                  <View
+                    onStartShouldSetResponder={() => true}
+                    style={[styles.suggestionsContainer, { maxHeight: calculateDropdownHeight }]}
+                  >
+                      {renderSuggestionsHeader()}
+                      <FlatList
+                        ref={suggestionsRef}
+                        data={suggestionsList}
+                        keyExtractor={(item, index) => item?.id || `item-${index}`}
+                        renderItem={renderSuggestionItem}
+                        keyboardShouldPersistTaps="always"
+                        keyboardDismissMode="on-drag"
+                        ListFooterComponent={renderSuggestionsFooter}
+                        scrollEnabled={suggestionsList.length > 5}
+                        nestedScrollEnabled={true}
+                        showsVerticalScrollIndicator={suggestionsList.length > 5}
+                      />
+                    </View>
+                ) : debouncedSearchTerm && !isSearchProductsLoading && (
+                  <View
+                    onStartShouldSetResponder={() => true}
+                    style={[styles.suggestionsContainer, { maxHeight: 200 }]}
+                  >
                   <View style={styles.emptyStateContainer}>
                     <Ionicons name="search-outline" size={48} color={theme.colors.grey400} />
                     <Text style={styles.emptyStateTitle}>No results found</Text>
@@ -515,8 +606,9 @@ const GlobalHeader = ({ style }) => {
                     </Text>
                   </View>
                 </View>
-              )}
-            </>
+                )}
+              </View>
+            </Pressable>
           )}
         </SearchInputWrapper>
 
@@ -718,6 +810,23 @@ const styles = StyleSheet.create({
     width: 16,
     height: 16,
   },
+  backdrop: {
+    position: 'absolute',
+    top: -5000, // Cover entire screen above
+    left: -5000, // Cover entire screen width
+    width: 10000, // Ensure full coverage
+    height: 10000, // Ensure full coverage
+    backgroundColor: 'transparent',
+    zIndex: 999,
+  },
+  backdropContent: {
+    position: 'absolute',
+    top: '100%',
+    left: 0,
+    right: 0,
+    alignItems: 'flex-start',
+    zIndex: 1000,
+  },
   suggestionsContainer: {
     position: 'absolute',
     top: '100%',
@@ -748,6 +857,9 @@ const styles = StyleSheet.create({
   },
   suggestionItemActive: {
     backgroundColor: theme.colors.primary + '08',
+  },
+  suggestionItemPressed: {
+    backgroundColor: theme.colors.primary + '15', // FIXED: Visual feedback on press
   },
   suggestionItemLeft: {
     flexDirection: 'row',

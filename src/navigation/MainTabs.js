@@ -4,11 +4,11 @@ import { getFocusedRouteNameFromRoute } from '@react-navigation/native';
 import { View, Text, StyleSheet, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import HomeStack from './HomeStack';
-// import SearchStack from './SearchStack';
-// import CategoryStack from './CategoryStack';
-// import CartStack from './CartStack';
-// import WishlistStack from './WishlistStack';
-// import AccountStack from './AccountStack';
+import SearchStack from './SearchStack';
+import CategoryStack from './CategoryStack';
+import CartStack from './CartStack';
+import WishlistStack from './WishlistStack';
+import AccountStack from './AccountStack';
 import { theme } from '../theme';
 import { useCartTotals } from '../hooks/useCart';
 
@@ -87,15 +87,15 @@ const MainTabs = () => {
           tabBarStyle: getTabBarVisibility(route) ? tabBarStyle : { height: 0, overflow: 'hidden' },
         })}
       />
-      {/* <Tab.Screen
+      <Tab.Screen
         name="SearchTab"
         component={SearchStack}
         options={{
           title: 'Search',
           tabBarButton: () => null,
         }}
-      /> */}
-      {/* <Tab.Screen
+      />
+      <Tab.Screen
         name="CategoryTab"
         component={CategoryStack}
         options={{
@@ -110,8 +110,8 @@ const MainTabs = () => {
             </View>
           ),
         }}
-      /> */}
-      {/* <Tab.Screen
+      />
+      <Tab.Screen
         name="CartTab"
         component={CartStack}
         options={({ route }) => ({
@@ -136,8 +136,8 @@ const MainTabs = () => {
           ),
           tabBarStyle: getTabBarVisibility(route) ? tabBarStyle : { height: 0, overflow: 'hidden' },
         })}
-      /> */}
-      {/* <Tab.Screen
+      />
+      <Tab.Screen
         name="WishlistTab"
         component={WishlistStack}
         options={({ route }) => ({
@@ -153,8 +153,8 @@ const MainTabs = () => {
           ),
           tabBarStyle: getTabBarVisibility(route) ? tabBarStyle : { height: 0, overflow: 'hidden' },
         })}
-      /> */}
-      {/* <Tab.Screen
+      />
+      <Tab.Screen
         name="AccountTab"
         component={AccountStack}
         options={({ route }) => ({
@@ -170,7 +170,7 @@ const MainTabs = () => {
           ),
           tabBarStyle: getTabBarVisibility(route) ? tabBarStyle : { height: 0, overflow: 'hidden' },
         })}
-      /> */}
+      />
     </Tab.Navigator>
   );
 };

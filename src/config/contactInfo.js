@@ -1,13 +1,3 @@
-/*
- 🔒 FILE TEMPORARILY DISABLED FOR FORENSIC DEBUGGING
- Original file: src/config/contactInfo.js
- Disabled on: 2025-12-16T23:05:52.321Z
- 
-/*
- 🔒 FILE TEMPORARILY DISABLED FOR FORENSIC DEBUGGING
- Original file: src/config/contactInfo.js
- Disabled on: Tue Dec 16 23:05:04 GMT 2025
-
 /**
  * Contact Information Configuration
  * 
@@ -61,8 +51,3 @@ export const getContactEmail = (type = 'support') => {
 };
 
 export default contactInfo;
-
-
-*/
-
-*/

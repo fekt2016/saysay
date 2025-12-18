@@ -11,6 +11,7 @@ import PermissionScreen from '../screens/profile/PermissionScreen';
 import ChatScreen from '../screens/support/ChatScreen';
 import WishlistScreen from '../screens/wishlist/WishlistScreen';
 import CouponScreen from '../screens/coupons/CouponScreen';
+import ProductDetailScreen from '../screens/products/ProductDetailScreen';
 import { defaultHeaderOptions } from './headerConfig';
 
 const Stack = createNativeStackNavigator();
@@ -103,6 +104,14 @@ const ProfileStack = () => {
         options={{ 
           presentation: 'card',
           title: 'Wishlist',
+        }}
+      />
+      <Stack.Screen
+        name="ProductDetail"
+        component={ProductDetailScreen}
+        options={{ 
+          presentation: 'card',
+          title: 'Product Details',
         }}
       />
     </Stack.Navigator>

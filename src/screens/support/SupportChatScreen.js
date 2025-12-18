@@ -295,7 +295,7 @@ const SupportChatScreen = ({ route, navigation }) => {
             {((formData.department === 'Orders & Delivery' ||
               formData.department === 'Shipping & Returns' ||
               formData.department === 'Payments & Billing') &&
-              !orderId && (
+              !orderId) && (
                 <View style={styles.inputWrapper}>
                   <Text style={styles.label}>Related Order (Optional)</Text>
                   <TouchableOpacity

@@ -42,9 +42,9 @@ import LogoIcon from '../../components/header/LogoIcon';const SecuritySettingsSc
 
   const getHasPin = () => {
     return (
-      user?.securitySettings?.hasPin === true 
-      profileData?.securitySettings?.hasPin === true 
-      profileData?.data?.securitySettings?.hasPin === true 
+      user?.securitySettings?.hasPin === true ||
+      profileData?.securitySettings?.hasPin === true ||
+      profileData?.data?.securitySettings?.hasPin === true ||
       false
     );
   };

@@ -1,9 +1,8 @@
 import React from 'react';
-import { NavigationContainer } from '@react-navigation/native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StatusBar } from 'expo-status-bar';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import MainTabs from './src/navigation/MainTabs';
+import AppNavigator from './src/navigation/AppNavigator';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -19,9 +18,7 @@ export default function App() {
     <QueryClientProvider client={queryClient}>
       <GestureHandlerRootView style={{ flex: 1 }}>
         <StatusBar style="auto" />
-        <NavigationContainer>
-          <MainTabs />
-        </NavigationContainer>
+        <AppNavigator />
       </GestureHandlerRootView>
     </QueryClientProvider>
   );

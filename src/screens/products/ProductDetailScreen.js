@@ -41,13 +41,14 @@ const ProductDetailScreen = () => {
   const navigation = useNavigation();
   const route = useRoute();
   const { productId, id } = route?.params || {};
+  
   const productIdToUse = productId || id;
 
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [quantity, setQuantity] = useState(1);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedVariant, setSelectedVariant] = useState(null);
-  const [selectedAttributes, setSelectedAttributes] = useState();
+  const [selectedAttributes, setSelectedAttributes] = useState({});
 
   const { useGetProductById } = useProduct();
   const { data: productData, isLoading, error, refetch } = useGetProductById(productIdToUse);

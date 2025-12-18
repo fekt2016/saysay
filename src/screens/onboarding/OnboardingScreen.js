@@ -53,25 +53,39 @@ const OnboardingScreen = () => {
   const flatListRef = useRef(null);
   const [currentIndex, setCurrentIndex] = useState(0);
 
-  const isLastSlide = currentIndex === ONBOARDING_SLIDES.length - 1;const handleComplete = async () => {
+  const isLastSlide = currentIndex === ONBOARDING_SLIDES.length - 1;
+
+  const handleComplete = async () => {
     try {
       await setOnboardingCompleted();
-      logger.debug('[Onboarding] Onboarding completed, navigating to login');
-      navigation.replace('Auth', { screen: 'Login' });
+      logger.debug('[Onboarding] Onboarding completed');
+      // AppNavigator will automatically switch to main navigator
+      // Navigation to Auth will be handled by AppNavigator
     } catch (error) {
       logger.error('[Onboarding] Error completing onboarding:', error);
-
-      navigation.replace('Auth', { screen: 'Login' });
+      // Still mark as completed to allow app to proceed
+      try {
+        await setOnboardingCompleted();
+      } catch (retryError) {
+        logger.error('[Onboarding] Error retrying completion:', retryError);
+      }
     }
-  };const handleSkip = async () => {
+  };
+
+  const handleSkip = async () => {
     try {
       await setOnboardingCompleted();
-      logger.debug('[Onboarding] Onboarding skipped, navigating to login');
-      navigation.replace('Auth', { screen: 'Login' });
+      logger.debug('[Onboarding] Onboarding skipped');
+      // AppNavigator will automatically switch to main navigator
+      // Navigation to Auth will be handled by AppNavigator
     } catch (error) {
       logger.error('[Onboarding] Error skipping onboarding:', error);
-
-      navigation.replace('Auth', { screen: 'Login' });
+      // Still mark as completed to allow app to proceed
+      try {
+        await setOnboardingCompleted();
+      } catch (retryError) {
+        logger.error('[Onboarding] Error retrying skip:', retryError);
+      }
     }
   };const handleNext = () => {
     if (isLastSlide) {
@@ -138,7 +152,7 @@ const OnboardingScreen = () => {
         renderItem={renderSlide}
         keyExtractor={(item) => item.id}
         horizontal
-        pagingEnabled ||
+        pagingEnabled
         showsHorizontalScrollIndicator={false}
         onScroll={handleScroll}
         scrollEventThrottle={16}

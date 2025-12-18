@@ -1,5 +1,6 @@
 import { useQueryClient, useQuery, useMutation } from "@tanstack/react-query";
 import { orderService } from '../services/orderApi';
+import useAuth from './useAuth';
 
 export const getOrderStructure = (orderData) => {
   if (!orderData) return [];
@@ -75,11 +76,21 @@ export const useCreateOrder = () => {
 };
 
 export const useGetUserOrders = () => {
+  const { isAuthenticated } = useAuth();
+  
   return useQuery({
     queryKey: ["orders"],
     queryFn: async () => {
       const data = await orderService.getUserOrders();
       return data;
+    },
+    enabled: !!isAuthenticated, // Only run when user is authenticated
+    retry: (failureCount, error) => {
+      // Don't retry on 401 errors
+      if (error?.response?.status === 401) {
+        return false;
+      }
+      return failureCount < 2;
     },
   });
 };

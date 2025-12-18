@@ -71,6 +71,7 @@ const heroSlides = [
 const HomeScreen = () => {
   const navigation = useNavigation();
   const [refreshing, setRefreshing] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useLayoutEffect(() => {
     navigation.setOptions({
@@ -83,11 +84,11 @@ const HomeScreen = () => {
   const { getProducts } = useProduct();
 
   const { data: productsData, isLoading: isProductsLoading, refetch: refetchProducts, error: productsError } = getProducts;
-
+ 
   const { getCategories } = useCategory();
 
   const { data: categoriesData, isLoading: isCategoriesLoading, refetch: refetchCategories, error: categoriesError } = getCategories;
-
+  
   const { useGetEazShopProducts } = useEazShop();
   const { data: eazshopData, isLoading: isEazShopLoading, refetch: refetchEazShop } = useGetEazShopProducts();
 
@@ -95,31 +96,31 @@ const HomeScreen = () => {
 
   const products = useMemo(() => {
     if (!productsData) return [];
-
+ 
     if (productsData.data?.data && Array.isArray(productsData.data.data)) {
       return productsData.data.data;
     }
-
+    
     if (productsData.data?.products && Array.isArray(productsData.data.products)) {
       return productsData.data.products;
     }
-
+    
     if (productsData.products && Array.isArray(productsData.products)) {
       return productsData.products;
     }
-
+    
     if (productsData.results && Array.isArray(productsData.results)) {
       return productsData.results;
     }
-
+    
     if (productsData.data && Array.isArray(productsData.data)) {
       return productsData.data;
     }
-
+    
     if (Array.isArray(productsData)) {
       return productsData;
     }
-
+    
     return [];
   }, [productsData]);
 
@@ -171,56 +172,11 @@ const HomeScreen = () => {
     return sellersList;
   }, [sellersData]);
 
-  const sellersWithProducts = useMemo(() => {
-    if (!sellers.length || !products.length) return sellers.map(seller => ({ ...seller, topProducts: [] }));
-
-    return sellers.map(seller => {
-      const sellerId = seller._id || seller.id;
-      if (!sellerId) return { ...seller, topProducts: [] };
-
-      const sellerProducts = products.filter(product => {
-        const productSellerId = product.seller?._id || 
-                               product.seller?.id || 
-                               product.sellerId || 
-                               product.seller ||
-                               product.sellerId?._id ||
-                               product.sellerId?.id;
-        return productSellerId && (productSellerId.toString() === sellerId.toString() || productSellerId === sellerId);
-      });
-
-      if (sellerProducts.length === 0) {
-        return { ...seller, topProducts: [] };
-      }
-
-      const sortedProducts = [...sellerProducts].sort((a, b) => {
-        const getSalesCount = (product) => {
-          return product.salesCount || 
-                 product.totalOrders || 
-                 product.ordersCount || 
-                 product.soldCount || 
-                 product.quantitySold || 
-                 product.purchases || 
-                 product.sales ||
-                 product.totalSales ||
-                 product.itemsSold ||
-                 (product.quantity && product.quantitySold ? product.quantity - product.quantitySold : 0) ||
-                 0;
-        };
-
-        const aSales = getSalesCount(a);
-        const bSales = getSalesCount(b);
-        return bSales - aSales;
-      });
-
-      const topProducts = sortedProducts.slice(0, 2);
-
-      return { ...seller, topProducts };
-    });
-  }, [sellers, products]);
 
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
+    setRefreshKey(prev => prev + 1);
     try {
       await Promise.all([
         refetchProducts?.() || Promise.resolve(),
@@ -292,6 +248,67 @@ const HomeScreen = () => {
     );
   };
 
+  const { useGetAllPublicProductBySeller } = useProduct();
+
+  const SellerCardWithProducts = ({ seller, refreshKey }) => {
+    const sellerId = seller._id || seller.id;
+    const { data: sellerProductsData, isLoading: isLoadingProducts } = useGetAllPublicProductBySeller(sellerId);
+
+    const sellerProducts = useMemo(() => {
+      if (!sellerProductsData) return [];
+      if (Array.isArray(sellerProductsData)) return sellerProductsData;
+      if (sellerProductsData?.data?.products) return sellerProductsData.data.products;
+      if (sellerProductsData?.products) return sellerProductsData.products;
+      if (sellerProductsData?.data?.data?.products) return sellerProductsData.data.data.products;
+      return [];
+    }, [sellerProductsData]);
+
+    const topProducts = useMemo(() => {
+      if (sellerProducts.length === 0) return [];
+
+      const sortedProducts = [...sellerProducts].sort((a, b) => {
+        const getSalesCount = (product) => {
+          return product.salesCount || 
+                 product.totalOrders || 
+                 product.ordersCount || 
+                 product.soldCount || 
+                 product.quantitySold || 
+                 product.purchases || 
+                 product.sales ||
+                 product.totalSales ||
+                 product.itemsSold ||
+                 (product.quantity && product.quantitySold ? product.quantity - product.quantitySold : 0) ||
+                 0;
+        };
+
+        const aSales = getSalesCount(a);
+        const bSales = getSalesCount(b);
+        return bSales - aSales;
+      });
+
+      if (sortedProducts.length <= 2) {
+        return sortedProducts;
+      }
+
+      const seededRandom = (seed, index) => {
+        const x = Math.sin((seed + index) * 12.9898) * 43758.5453;
+        return x - Math.floor(x);
+      };
+
+      const shuffled = [...sortedProducts].sort((a, b) => {
+        const aIndex = sortedProducts.indexOf(a);
+        const bIndex = sortedProducts.indexOf(b);
+        const aRand = seededRandom(refreshKey + sellerId, aIndex);
+        const bRand = seededRandom(refreshKey + sellerId, bIndex);
+        return bRand - aRand;
+      });
+
+      return shuffled.slice(0, 2);
+    }, [sellerProducts, refreshKey, sellerId]);
+
+    return renderSeller({ ...seller, topProducts, isLoadingProducts });
+  };
+
   const renderSeller = (item) => {
     const sellerId = item._id || item.id;
     if (!sellerId) {
@@ -303,7 +320,8 @@ const HomeScreen = () => {
     const avatarUri = item.avatar || item.image || item.logo || item.profilePicture || item.photo;
     const rating = item.rating || item.ratings?.average || item.averageRating || 0;
     const topProducts = item.topProducts || [];
-
+    const isLoadingProducts = item.isLoadingProducts || false;
+    
     return (
       <TouchableOpacity
         style={styles.sellerCardContainer}
@@ -335,7 +353,20 @@ const HomeScreen = () => {
           </View>
         </View>
 
-        {topProducts.length > 0 && (
+        {isLoadingProducts ? (
+          <View style={styles.productsGrid}>
+            <View style={styles.productPreview}>
+              <View style={styles.productPreviewPlaceholder}>
+                <Text style={styles.productPreviewPlaceholderText}>⏳</Text>
+              </View>
+            </View>
+            <View style={styles.productPreview}>
+              <View style={styles.productPreviewPlaceholder}>
+                <Text style={styles.productPreviewPlaceholderText}>⏳</Text>
+              </View>
+            </View>
+          </View>
+        ) : topProducts.length > 0 ? (
           <View style={styles.productsGrid}>
             {topProducts.map((product, index) => {
               const productId = product._id || product.id;
@@ -385,9 +416,7 @@ const HomeScreen = () => {
               <View style={styles.productPreviewEmpty} />
             )}
           </View>
-        )}
-
-        {topProducts.length === 0 && (
+        ) : (
           <View style={styles.noProductsContainer}>
             <Text style={styles.noProductsText}>No products available</Text>
           </View>
@@ -436,7 +465,7 @@ const HomeScreen = () => {
               <Text style={styles.sectionLinkIcon}>→</Text>
             </TouchableOpacity>
           </View>
-
+          
           {isCategoriesLoading ? (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoryList}>
               {[1, 2, 3, 4, 5].map((index) => (
@@ -459,7 +488,7 @@ const HomeScreen = () => {
           )}
         </View>
 
-        {(sellersWithProducts.length > 0 || sellers.length > 0) && (
+        {sellers.length > 0 && (
           <View style={styles.sellersSection}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>Trending Sellers</Text>
@@ -479,25 +508,12 @@ const HomeScreen = () => {
                   </View>
                 ))}
               </ScrollView>
-            ) : sellersWithProducts.length > 0 ? (
-              <FlatList
-                data={sellersWithProducts}
-                renderItem={({ item }) => (
-                  <View style={styles.sellerCardWrapper}>
-                    {renderSeller(item)}
-                  </View>
-                )}
-                keyExtractor={(item, index) => item._id || item.id || `seller-${index}`}
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.sellersListContent}
-              />
-            ) : sellers.length > 0 ? (
+            ) : (
               <FlatList
                 data={sellers}
                 renderItem={({ item }) => (
                   <View style={styles.sellerCardWrapper}>
-                    {renderSeller({ ...item, topProducts: [] })}
+                    <SellerCardWithProducts seller={item} refreshKey={refreshKey} />
                   </View>
                 )}
                 keyExtractor={(item, index) => item._id || item.id || `seller-${index}`}
@@ -505,7 +521,7 @@ const HomeScreen = () => {
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={styles.sellersListContent}
               />
-            ) : null}
+            )}
           </View>
         )}
 

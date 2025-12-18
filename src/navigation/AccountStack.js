@@ -38,7 +38,7 @@ import HelpCenterTabsScreen from '../screens/info/HelpCenterTabsScreen';
 import PrivacyPolicyScreen from '../screens/info/PrivacyPolicyScreen';
 import TermsScreen from '../screens/info/TermsScreen';
 import { defaultHeaderOptions } from './headerConfig';
-import { useAuth } from '../../hooks/useAuth';
+import { useAuth } from '../hooks/useAuth';
 import { theme } from '../theme';
 
 const Stack = createNativeStackNavigator();

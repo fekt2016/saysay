@@ -1,7 +1,7 @@
 import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import HomeScreen from '../screens/home/HomeScreen';
-// import ProductDetailScreen from '../screens/products/ProductDetailScreen';
+import ProductDetailScreen from '../screens/products/ProductDetailScreen';
 // import ProductListScreen from '../screens/products/ProductListScreen';
 // import BestSellersScreen from '../screens/home/BestSellersScreen';
 // import NewArrivalsScreen from '../screens/home/NewArrivalsScreen';
@@ -25,7 +25,7 @@ const HomeStack = () => {
           headerShown: true,
         }}
       />
-      {/* <Stack.Screen
+      <Stack.Screen
         name="ProductDetail"
         component={ProductDetailScreen}
         options={{ 
@@ -33,7 +33,7 @@ const HomeStack = () => {
           title: 'Product Details',
         }}
       />
-      <Stack.Screen
+      {/* <Stack.Screen
         name="CategoryProducts"
         component={ProductListScreen}
         options={{ 

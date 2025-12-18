@@ -136,7 +136,7 @@ const CategoryScreen = () => {
     return (
       productsData?.data?.total ||
       productsData?.total ||
-      products.length 
+      products.length ||
       0
     );
   }, [productsData, products.length]);
@@ -534,11 +534,11 @@ const CategoryScreen = () => {
                             styles.filterOptionCard,
                             isSelected && styles.filterOptionCardActive,
                           ]}
-                          onPress={() => {}
+                          onPress={() => {
                             setSelectedSubcategory(
                               isSelected ? null : sub._id || sub.id
-                            )
-                          }
+                            );
+                          }}
                         >
                           <Text
                             style={[

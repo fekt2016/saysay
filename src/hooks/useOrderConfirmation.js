@@ -100,7 +100,7 @@ export const useOrderConfirmation = (
           if (typeof paymentApi.verifyPaystackPayment !== 'function') {
             console.error('[useOrderConfirmation] ❌ verifyPaystackPayment is not a function!');
             console.error('[useOrderConfirmation] paymentApi:', paymentApi);
-            console.error('[useOrderConfirmation] paymentApi keys:', Object.keys(paymentApi || ));
+            console.error('[useOrderConfirmation] paymentApi keys:', Object.keys(paymentApi || {}));
             console.error('[useOrderConfirmation] verifyPaystackPayment type:', typeof paymentApi.verifyPaystackPayment);
             throw new Error('Payment verification function is not available');
           }

@@ -4,9 +4,9 @@ export const parseDeepLink = (url) => {
   try {
     let parsedUrl;
 
-    if (url.startsWith('saysay:
-      const urlWithoutScheme = url.replace('saysay:
-      parsedUrl = new URL(`https:
+    if (url.startsWith('saysay://')) {
+      const urlWithoutScheme = url.replace('saysay://', '');
+      parsedUrl = new URL(`https://${urlWithoutScheme}`);
     } else {
 
       parsedUrl = new URL(url);

@@ -53,6 +53,12 @@ export const useAuth = () => {
       const token = await SecureStore.getItemAsync('user_token');
       
       if (!token) {
+        // Cancel all active queries to prevent API calls without token
+        queryClient.cancelQueries();
+        // Remove all queries to prevent refetching
+        queryClient.removeQueries();
+        // Set auth user to null
+        queryClient.setQueryData(['auth', 'user'], null);
         return null;
       }
 
@@ -157,7 +163,25 @@ export const useAuth = () => {
       }
     },
     onError: (error) => {
-      logger.error('❌ [Login] Login error:', error);
+      const errorMessage = error?.response?.data?.message || 
+                          error?.message || 
+                          error?.toString() || 
+                          'Unknown login error';
+      const statusCode = error?.response?.status;
+      const errorData = error?.response?.data;
+      
+      logger.error('❌ [Login] Login error:', {
+        message: errorMessage,
+        status: statusCode,
+        error: errorData,
+        code: error?.code,
+        stack: error?.stack,
+      });
+      
+      // Log full error for debugging
+      if (__DEV__) {
+        console.error('❌ [Login] Full error object:', error);
+      }
     },
   });
 
@@ -256,7 +280,25 @@ export const useAuth = () => {
       }
     },
     onError: (error) => {
-      logger.error('❌ [OTP] Login error:', error);
+      const errorMessage = error?.response?.data?.message || 
+                          error?.message || 
+                          error?.toString() || 
+                          'Unknown OTP login error';
+      const statusCode = error?.response?.status;
+      const errorData = error?.response?.data;
+      
+      logger.error('❌ [OTP] Login error:', {
+        message: errorMessage,
+        status: statusCode,
+        error: errorData,
+        code: error?.code,
+        stack: error?.stack,
+      });
+      
+      // Log full error for debugging
+      if (__DEV__) {
+        console.error('❌ [OTP] Full error object:', error);
+      }
     },
   });
 

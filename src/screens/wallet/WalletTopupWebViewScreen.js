@@ -117,8 +117,9 @@ import logger from '../../utils/logger';const WalletTopupWebViewScreen = () => {
     const isCallbackUrl = isTopupCallback || isTopupSuccess;
 
     const isDeepLinkCallback = 
-      url.startsWith('saysay:
-      url.startsWith('saysay:
+      url.startsWith('saysay://') ||
+      url.startsWith('saysay://wallet/topup-callback') ||
+      url.startsWith('saysay://wallet/topup-success');
 
     if (isCallbackUrl || isDeepLinkCallback) {
       logger.debug('[WalletTopupWebView] ✅ Detected redirect to callback URL');
@@ -242,8 +243,9 @@ import logger from '../../utils/logger';const WalletTopupWebViewScreen = () => {
           const isTopupCallback = url.includes('/wallet/topup-callback') || url.includes('topup-callback');
           const isTopupSuccess = url.includes('/wallet/topup-success') || url.includes('topup-success');
           const isDeepLinkCallback = 
-            url.startsWith('saysay:
-            url.startsWith('saysay:
+            url.startsWith('saysay://') ||
+            url.startsWith('saysay://wallet/topup-callback') ||
+            url.startsWith('saysay://wallet/topup-success');
 
           if (isTopupCallback || isTopupSuccess || isDeepLinkCallback) {
             logger.debug('[WalletTopupWebView] ✅ PAYSTACK REDIRECT DETECTED!');

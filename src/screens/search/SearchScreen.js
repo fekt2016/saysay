@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import { ActivityIndicator, FlatList, Modal, ScrollView, Text, TextInput, TouchableOpacity, View, StyleSheet } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { ActivityIndicator, FlatList, Modal, ScrollView, Text, TextInput, TouchableOpacity, View, StyleSheet, Keyboard, Pressable } from 'react-native';
+
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRoute } from '@react-navigation/native';
 import ProductCard from '../../components/ProductCard';
@@ -11,6 +11,19 @@ import { useCategory } from '../../hooks/useCategory';
 const SearchScreen = ({ navigation }) => {
   const route = useRoute();
   const routeParams = route?.params || {};
+
+  // FIXED: Move state declarations before queryParams useMemo
+  const [searchQuery, setSearchQuery] = useState(routeParams.query || '');
+  const [sortBy, setSortBy] = useState('relevance');
+  const [showFilters, setShowFilters] = useState(false);
+  const [showSortModal, setShowSortModal] = useState(false);
+  const [filters, setFilters] = useState({
+    category: [],
+    priceRange: { min: 0, max: 5000 },
+    rating: null,
+    inStock: false,
+    onSale: false,
+  });
 
   const queryParams = useMemo(() => {
     const params = {};
@@ -43,8 +56,6 @@ const SearchScreen = ({ navigation }) => {
     return params;
   }, [routeParams, filters, sortBy]);
 
-  const [searchQuery, setSearchQuery] = useState(routeParams.query || '');
-
   useEffect(() => {
     if (routeParams.query !== undefined) {
       setSearchQuery(routeParams.query);
@@ -60,16 +71,11 @@ const SearchScreen = ({ navigation }) => {
       navigation.setParams({ query: searchQuery.trim() });
     }
   }, [searchQuery, navigation]);
-  const [sortBy, setSortBy] = useState('relevance');
-  const [showFilters, setShowFilters] = useState(false);
-  const [showSortModal, setShowSortModal] = useState(false);
-  const [filters, setFilters] = useState({
-    category: [],
-    priceRange: { min: 0, max: 5000 },
-    rating: null,
-    inStock: false,
-    onSale: false,
-  });
+
+  const handleClearSearch = useCallback(() => {
+    setSearchQuery('');
+    navigation.setParams({ query: '' });
+  }, [navigation]);
 
   const { data: productData, isLoading } = useSearchResults(queryParams);
 
@@ -81,9 +87,10 @@ const SearchScreen = ({ navigation }) => {
     };
   }, [productData]);
 
+  // FIXED: Correct useCategory hook usage
   const { getParentCategories } = useCategory();
-  const { data: categoriesData } = getParentCategories;
-  const categories = categoriesData?.data?.categories || [];
+  const categoriesData = getParentCategories?.data;
+  const categories = categoriesData?.data?.categories || categoriesData?.categories || [];
 
   const searchQueryDisplay = queryParams.q || searchQuery || '';
 
@@ -112,10 +119,16 @@ const SearchScreen = ({ navigation }) => {
     const productId = item._id || item.id;
     if (!productId) return null;
 
+    // FIXED: Ensure navigation callback always fires with keyboard dismiss
+    const handleProductPress = () => {
+      Keyboard.dismiss();
+      navigation.navigate('ProductDetail', { productId, id: productId });
+    };
+
     return (
       <ProductCard
         product={item}
-        onPress={() => navigation.navigate('ProductDetail', { productId, id: productId })}
+        onPress={handleProductPress}
         style={{ marginHorizontal: theme.spacing.sm, width: '55%' }}
       />
     );
@@ -138,7 +151,7 @@ const SearchScreen = ({ navigation }) => {
             autoCapitalize="none"
           />
           {searchQuery.length > 0 && (
-            <ClearButton onPress={() => setSearchQuery('')} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+            <ClearButton onPress={handleClearSearch} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
               <ClearIcon>✕</ClearIcon>
             </ClearButton>
           )}
@@ -190,7 +203,7 @@ const SearchScreen = ({ navigation }) => {
         onRequestClose={() => setShowSortModal(false)}
       >
         <SortModalOverlay onPress={() => setShowSortModal(false)}>
-          <SortModalContent onPress={(e) => e.stopPropagation()}>
+          <SortModalContent onStartShouldSetResponder={() => true}>
             <SortModalTitle>Sort By</SortModalTitle>
             {['relevance', 'price-low', 'price-high', 'rating', 'newest'].map((option) => (
               <SortOptionButton
@@ -222,7 +235,7 @@ const SearchScreen = ({ navigation }) => {
         onRequestClose={toggleFilters}
       >
         <FilterModalOverlay onPress={toggleFilters}>
-          <FilterModalContent onPress={(e) => e.stopPropagation()}>
+          <FilterModalContent onStartShouldSetResponder={() => true}>
             <FilterModalHeader>
               <FilterModalTitle>Filters</FilterModalTitle>
               <CloseButton onPress={toggleFilters}>
@@ -465,8 +478,10 @@ const SortButtonIcon = ({style, ...props}) => (
   <Text {...props} style={[styles.sortButtonIcon, style]} />
 );
 
-const SortModalOverlay = ({style, ...props}) => (
-  <TouchableOpacity {...props} style={[styles.sortModalOverlay, style]} />
+const SortModalOverlay = ({style, children, ...props}) => (
+  <Pressable {...props} style={[styles.sortModalOverlay, style]}>
+    {children}
+  </Pressable>
 );
 
 const SortModalContent = ({style, ...props}) => (
@@ -489,8 +504,10 @@ const SortOptionCheck = ({style, ...props}) => (
   <Text {...props} style={[styles.sortOptionCheck, style]} />
 );
 
-const FilterModalOverlay = ({style, ...props}) => (
-  <TouchableOpacity {...props} style={[styles.filterModalOverlay, style]} />
+const FilterModalOverlay = ({style, children, ...props}) => (
+  <Pressable {...props} style={[styles.filterModalOverlay, style]}>
+    {children}
+  </Pressable>
 );
 
 const FilterModalContent = ({style, ...props}) => (
@@ -514,7 +531,12 @@ const CloseButtonText = ({style, ...props}) => (
 );
 
 const FilterScroll = ({style, ...props}) => (
-  <ScrollView {...props} style={[styles.filterScroll, style]} />
+  <ScrollView 
+    {...props} 
+    style={[styles.filterScroll, style]}
+    keyboardShouldPersistTaps="always"
+    keyboardDismissMode="on-drag"
+  />
 );
 
 const FilterSection = ({style, ...props}) => (
@@ -610,7 +632,12 @@ const EmptyText = ({style, ...props}) => (
 );
 
 const ProductsList = ({style, ...props}) => (
-  <FlatList {...props} style={[styles.productsList, style]} />
+  <FlatList 
+    {...props} 
+    style={[styles.productsList, style]}
+    keyboardShouldPersistTaps="always"
+    keyboardDismissMode="on-drag"
+  />
 );
 
 const SearchInputContainer = ({style, ...props}) => (
@@ -715,14 +742,14 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 5,
   },
-  sortModalTitle: ,
+  sortModalTitle: {},
   sortOptionButton: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  sortOptionText: ,
-  sortOptionCheck: ,
+  sortOptionText: {},
+  sortOptionCheck: {},
   filterModalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
@@ -737,16 +764,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderBottomWidth: 2,
   },
-  filterModalTitle: ,
-  closeButton: ,
-  closeButtonText: ,
+  filterModalTitle: {},
+  closeButton: {},
+  closeButtonText: {},
   filterScroll: {
     flex: 1,
   },
   filterSection: {
     borderBottomWidth: 1,
   },
-  filterSectionTitle: ,
+  filterSectionTitle: {},
   filterCheckbox: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -758,7 +785,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  filterCheckboxCheck: ,
+  filterCheckboxCheck: {},
   filterCheckboxLabel: {
     flex: 1,
   },
@@ -787,11 +814,11 @@ const styles = StyleSheet.create({
   priceInputGroup: {
     flex: 1,
   },
-  priceInputLabel: ,
+  priceInputLabel: {},
   priceInput: {
     borderWidth: 1,
   },
-  priceSeparator: ,
+  priceSeparator: {},
   filterModalFooter: {
     borderTopWidth: 1,
   },
@@ -803,7 +830,7 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
-  applyButtonText: ,
+  applyButtonText: {},
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -846,12 +873,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing.md,
     paddingVertical: theme.spacing.sm,
   },
-  searchIcon: ,
+  searchIcon: {},
   searchInputField: {
     flex: 1,
   },
-  clearButton: ,
-  clearIcon: ,
+  clearButton: {},
+  clearIcon: {},
   sortSelect: {
     flex: 1,
   },

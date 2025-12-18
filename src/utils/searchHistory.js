@@ -20,7 +20,10 @@ export const saveSearchToHistory = async (searchTerm) => {
     const trimmedTerm = searchTerm.trim();
     const history = await getSearchHistory();
 
-    const filteredHistory = history.filter((item) => item !== trimmedTerm);
+    // FIXED: Case-insensitive deduplication
+    const filteredHistory = history.filter(
+      (item) => item.toLowerCase() !== trimmedTerm.toLowerCase()
+    );
 
     const newHistory = [trimmedTerm, ...filteredHistory].slice(0, MAX_HISTORY_ITEMS);
 
@@ -45,7 +48,10 @@ export const clearSearchHistory = async () => {
 export const removeSearchFromHistory = async (searchTerm) => {
   try {
     const history = await getSearchHistory();
-    const filteredHistory = history.filter((item) => item !== searchTerm);
+    // FIXED: Case-insensitive removal
+    const filteredHistory = history.filter(
+      (item) => item.toLowerCase() !== searchTerm.toLowerCase()
+    );
     await AsyncStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(filteredHistory));
     return filteredHistory;
   } catch (error) {

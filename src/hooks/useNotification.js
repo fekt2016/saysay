@@ -1,4 +1,4 @@
-export function useNotifications(options = ) {
+export function useNotifications(options = {}) {
   const { isAuthenticated, user } = useAuth();
 
   const queryOptions = {

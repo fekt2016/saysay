@@ -105,7 +105,7 @@ import LogoIcon from '../../components/header/LogoIcon';const RegionScreen = () 
     const query = searchQuery.toLowerCase().trim();
     return countries.filter(
       (country) =>
-        country.name.toLowerCase().includes(query) 
+        country.name.toLowerCase().includes(query) ||
         country.code.toLowerCase().includes(query)
     );
   }, [searchQuery]);

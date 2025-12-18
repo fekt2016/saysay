@@ -128,10 +128,10 @@ import { theme } from '../../theme';const ResetPINScreen = ({ navigation }) => {
       onError: (error) => {
         const errorMessage =
           error?.response?.data?.message ||
-          error?.message 
+          error?.message ||
           'Failed to reset PIN. Please try again.';
 
-        if (errorMessage.toLowerCase().includes('no pin set') 
+        if (errorMessage.toLowerCase().includes('no pin set') ||
             errorMessage.toLowerCase().includes('set a pin first')) {
 
           setErrors({ 
@@ -142,9 +142,9 @@ import { theme } from '../../theme';const ResetPINScreen = ({ navigation }) => {
           return;
         }
 
-        if (errorMessage.toLowerCase().includes('current pin') 
-            errorMessage.toLowerCase().includes('incorrect pin') 
-            errorMessage.toLowerCase().includes('wrong pin') 
+        if (errorMessage.toLowerCase().includes('current pin') ||
+            errorMessage.toLowerCase().includes('incorrect pin') ||
+            errorMessage.toLowerCase().includes('wrong pin') ||
             errorMessage.toLowerCase().includes('invalid pin')) {
           setErrors({ currentPin: errorMessage });
         } else {

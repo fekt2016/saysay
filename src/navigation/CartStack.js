@@ -6,7 +6,7 @@ import CheckoutScreen from '../screens/checkout/CheckoutScreen';
 import PaystackWebViewScreen from '../screens/checkout/PaystackWebViewScreen';
 import OrderCompleteScreen from '../screens/orders/OrderCompleteScreen';
 import { defaultHeaderOptions } from './headerConfig';
-import { useAuth } from '../../hooks/useAuth';
+import { useAuth } from '../hooks/useAuth';
 
 const Stack = createNativeStackNavigator();
 

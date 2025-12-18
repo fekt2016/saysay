@@ -66,7 +66,7 @@ export const useUpdateProfile = () => {
       const type = match ? `image/${match[1]}` : 'image/jpeg';
 
       const fileObject = {
-        uri: Platform.OS === 'ios' ? uri.replace('file:
+        uri: Platform.OS === 'ios' ? uri.replace('file://', '') : uri,
         name: filename || 'photo.jpg',
         type: type,
       };

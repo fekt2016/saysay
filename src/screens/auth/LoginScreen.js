@@ -301,9 +301,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing.xl,
     alignItems: 'center',
     justifyContent: 'center',
-
   },
-  logoImage: ,
+  logoImage: {
+    width: 120,
+    height: 120,
+    marginBottom: theme.spacing.md,
+  },
   formContainer: {
     flex: 1,
     backgroundColor: theme.colors.white,

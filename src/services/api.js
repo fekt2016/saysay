@@ -24,7 +24,7 @@ const PUBLIC_ROUTES = [
   'follow/:sellerId/followers',
   '/users/register',
   '/users/signup',
-  'users/login',
+  '/users/login',
   '/users/send-otp', 
   '/users/verify-otp', 
   '/users/forgot-password', 
@@ -206,7 +206,7 @@ api.interceptors.request.use(
           logger.debug(`[API] ✅ Token attached for: ${method.toUpperCase()} ${normalizedPath}`);
         }
       } else {
-        
+        // No token found for protected route - reject the request to prevent 401 loop
         try {
           const userData = await SecureStore.getItemAsync('user_data');
           if (userData) {
@@ -225,6 +225,10 @@ api.interceptors.request.use(
           logger.error(`[API] ❌ This will cause a 401 error!`);
           logger.error(`[API] 🔧 SOLUTION: User must log out and log back in`);
         }
+        
+        // Note: We don't reject here to allow the request to go through
+        // The 401 response will be handled by the response interceptor
+        // which will clear auth data and trigger navigation to login
       }
     } catch (error) {
       logger.error('[API] ❌ Error getting token from SecureStore:', error);
@@ -304,8 +308,16 @@ api.interceptors.response.use(
         logger.warn('[API] ⚠️ This might be a temporary issue. Error:', error.response?.data?.message || 'Unauthorized');
         
       } else {
+        // Check if this is a password change error
+        const errorMessage = error.response?.data?.message || '';
+        const isPasswordChangeError = errorMessage.includes('recently changed password') || 
+                                     errorMessage.includes('changed password');
         
         logger.error('[API] ❌ 401 Unauthorized - Clearing authentication data');
+        if (isPasswordChangeError) {
+          logger.warn('[API] ⚠️ User recently changed password - session invalidated');
+        }
+        
         try {
           const tokenExists = await SecureStore.getItemAsync('user_token');
           const userDataExists = await SecureStore.getItemAsync('user_data');
@@ -314,7 +326,13 @@ api.interceptors.response.use(
             logger.warn('[API] ⚠️ Found stale auth data - clearing it');
             await SecureStore.deleteItemAsync('user_token');
             await SecureStore.deleteItemAsync('user_data');
+            await SecureStore.deleteItemAsync('device_id');
             logger.debug('[API] ✅ Stale auth data cleared');
+            
+            // Note: React Query queries will be cancelled by useAuth hook
+            // when it detects no token. The navigation to login will happen
+            // automatically via AppNavigator when isAuthenticated becomes false.
+            logger.debug('[API] ✅ Auth state will be updated by useAuth hook');
           }
         } catch (e) {
           logger.error('[API] ❌ Error clearing storage:', e);

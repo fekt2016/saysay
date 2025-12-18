@@ -1,3 +1,6 @@
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import supportApi from '../services/supportApi';
+
 export const useCreateTicket = () => {
   const queryClient = useQueryClient();
 
@@ -12,20 +15,26 @@ export const useCreateTicket = () => {
       console.error('Failed to create ticket:', error);
     },
   });
-};export const useMyTickets = (params = ) => {
+};
+
+export const useMyTickets = (params = {}) => {
   return useQuery({
     queryKey: ['support-tickets', 'my', params],
     queryFn: () => supportApi.listTickets(params),
     staleTime: 30000, 
   });
-};export const useTicketDetail = (ticketId) => {
+};
+
+export const useTicketDetail = (ticketId) => {
   return useQuery({
     queryKey: ['support-ticket', ticketId],
     queryFn: () => supportApi.getTicketById(ticketId),
     enabled: !!ticketId,
     staleTime: 10000, 
   });
-};export const useReplyToTicket = () => {
+};
+
+export const useReplyToTicket = () => {
   const queryClient = useQueryClient();
 
   return useMutation({

@@ -196,8 +196,8 @@ const TrackingScreen = ({ route, navigation }) => {
   const getEstimatedDelivery = () => {
     if (order?.deliveryEstimate) {
       if (
-        order.deliveryEstimate.includes('Today') 
-        order.deliveryEstimate.includes('Business Day') 
+        order.deliveryEstimate.includes('Today') ||
+        order.deliveryEstimate.includes('Business Day') ||
         order.deliveryEstimate.includes('Arrives')
       ) {
         return order.deliveryEstimate;

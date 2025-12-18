@@ -183,7 +183,7 @@ const CheckoutScreen = () => {
   const [locationError, setLocationError] = useState('');
 
   const address = useMemo(
-    () => {}
+    () =>
       addressData?.data?.addresses ||
       addressData?.data?.data?.addresses ||
       [],
@@ -201,7 +201,7 @@ const CheckoutScreen = () => {
   }, [cartData]);
 
   const products = useMemo(
-    () => {}
+    () =>
       (rawItems || []).map((item) => ({
         product: item.product,
         quantity: item.quantity,
@@ -211,10 +211,10 @@ const CheckoutScreen = () => {
   );
 
   const hasEazShopProducts = useMemo(
-    () => {}
+    () =>
       products.some(
         (item) =>
-          item.product?.isEazShopProduct 
+          item.product?.isEazShopProduct ||
           item.product?.seller?.role === 'eazshop_store'
       ),
     [products]
@@ -798,7 +798,7 @@ const CheckoutScreen = () => {
               console.log('[CheckoutScreen] ✅ Payment initialization successful');
               console.log('[CheckoutScreen] 🔍 Payment result:', paymentResult);
               console.log('[CheckoutScreen] Payment result type:', typeof paymentResult);
-              console.log('[CheckoutScreen] Payment result keys:', Object.keys(paymentResult || ));
+              console.log('[CheckoutScreen] Payment result keys:', Object.keys(paymentResult || {}));
             } catch (paymentError) {
               console.error('[CheckoutScreen] ❌ Payment initialization failed:', paymentError);
               console.error('[CheckoutScreen] Error details:', {
@@ -1082,9 +1082,7 @@ const CheckoutScreen = () => {
                 {(formError || createAddressError) && (
                   <View style={styles.errorState}>
                     <Text style={styles.errorStateText}>
-                      {formError 
-                        createAddressError?.message 
-                        'Failed to create address'}
+                      {formError || createAddressError?.message || 'Failed to create address'}
                     </Text>
                   </View>
                 )}
@@ -1696,9 +1694,7 @@ const CheckoutScreen = () => {
               {(createOrderError || formError) && (
                 <ErrorState style={{ marginTop: theme.spacing.md }}>
                   <ErrorStateText>
-                    {createOrderError?.message 
-                      formError 
-                      'Something went wrong'}
+                    {createOrderError?.message || formError || 'Something went wrong'}
                   </ErrorStateText>
                 </ErrorState>
               )}
@@ -1974,14 +1970,14 @@ const styles = StyleSheet.create({
   scrollContainer: {
     flex: 1,
   },
-  content: ,
-  section: ,
+  content: {},
+  section: {},
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  sectionTitle: ,
+  sectionTitle: {},
   tabContainer: {
     flexDirection: 'row',
     borderBottomWidth: 1,
@@ -1991,8 +1987,8 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: 0,
     borderBottomRightRadius: 0,
   },
-  tabButtonText: ,
-  addressList: ,
+  tabButtonText: {},
+  addressList: {},
   addressItem: {
     borderWidth: 2,
     position: 'relative',
@@ -2010,12 +2006,12 @@ const styles = StyleSheet.create({
   addressInfo: {
     flex: 1,
   },
-  addressName: ,
-  addressText: ,
+  addressName: {},
+  addressText: {},
   defaultBadge: {
     alignSelf: 'flex-start',
   },
-  defaultBadgeText: ,
+  defaultBadgeText: {},
   selectionCheckmark: {
     position: 'absolute',
     width: 24,
@@ -2030,8 +2026,8 @@ const styles = StyleSheet.create({
   formGroup: {
     flex: 1,
   },
-  errorText: ,
-  hintText: ,
+  errorText: {},
+  hintText: {},
   deliveryOptions: {
     gap: theme.spacing.md,
   },
@@ -2231,16 +2227,16 @@ const styles = StyleSheet.create({
   deliveryInfo: {
     flex: 1,
   },
-  deliveryTitle: ,
-  deliveryDescription: ,
-  pickupCenterSelector: ,
-  pickupCenterList: ,
+  deliveryTitle: {},
+  deliveryDescription: {},
+  pickupCenterSelector: {},
+  pickupCenterList: {},
   pickupCenterItem: {
     borderWidth: 2,
     position: 'relative',
   },
-  pickupCenterName: ,
-  pickupCenterAddress: ,
+  pickupCenterName: {},
+  pickupCenterAddress: {},
   paymentOptions: {
     gap: theme.spacing.md,
   },
@@ -2302,8 +2298,8 @@ const styles = StyleSheet.create({
   paymentInfo: {
     flex: 1,
   },
-  paymentTitle: ,
-  paymentDescription: ,
+  paymentTitle: {},
+  paymentDescription: {},
   couponSection: {
     marginBottom: theme.spacing.lg,
     padding: theme.spacing.md,
@@ -2456,26 +2452,26 @@ const styles = StyleSheet.create({
   summaryTotal: {
     borderTopWidth: 1,
   },
-  summaryText: ,
-  summaryTotalText: ,
-  fragileCheckboxContainer: ,
+  summaryText: {},
+  summaryTotalText: {},
+  fragileCheckboxContainer: {},
   fragileCheckboxLabel: {
     flexDirection: 'row',
     alignItems: 'center',
   },
-  fragileCheckboxText: ,
-  fragileHint: ,
+  fragileCheckboxText: {},
+  fragileHint: {},
   infoText: {
     borderLeftWidth: 3,
   },
-  errorState: ,
-  errorStateText: ,
+  errorState: {},
+  errorStateText: {},
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  loadingText: ,
+  loadingText: {},
   stickyHeader: {
     position: 'absolute',
     top: 0,

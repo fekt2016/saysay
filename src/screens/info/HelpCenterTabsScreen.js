@@ -44,7 +44,7 @@ const HelpCenterTabsScreen = ({ navigation, route }) => {
       qaData.forEach((category) => {
         category.items.forEach((item) => {
           if (
-            item.q.toLowerCase().includes(searchTerm.toLowerCase()) 
+            item.q.toLowerCase().includes(searchTerm.toLowerCase()) ||
             item.a.toLowerCase().includes(searchTerm.toLowerCase())
           ) {
             matchingItems.push(item);
