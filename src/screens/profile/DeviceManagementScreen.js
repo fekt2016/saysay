@@ -267,8 +267,18 @@ import AppButton from '../../components/AppButton';const DeviceManagementScreen 
     );
   }
 
-  const deviceList = devices || [];
+  // Ensure devices is an array and handle edge cases
+  const deviceList = Array.isArray(devices) ? devices : [];
   const otherDevicesCount = deviceList.filter(d => !d.isCurrentDevice && d.isActive).length;
+  
+  // Debug logging
+  if (__DEV__) {
+    console.log('[DeviceManagementScreen] Device list:', {
+      devicesLength: deviceList.length,
+      devices: deviceList,
+      otherDevicesCount,
+    });
+  }
 
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>

@@ -375,7 +375,7 @@ const styles = StyleSheet.create({
     marginLeft: theme.spacing.md,
   },
   infoTitle: {
-    fontSize: theme.typography.fontSize.base,
+    fontSize: theme.typography.fontSize.md,
     fontWeight: theme.typography.fontWeight.bold,
     color: theme.colors.textPrimary,
     marginBottom: theme.spacing.xs / 2,
@@ -413,7 +413,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   toggleLabel: {
-    fontSize: theme.typography.fontSize.base,
+    fontSize: theme.typography.fontSize.md,
     fontWeight: theme.typography.fontWeight.medium,
     color: theme.colors.textPrimary,
     marginBottom: theme.spacing.xs / 2,
@@ -434,7 +434,7 @@ const styles = StyleSheet.create({
     borderColor: theme.colors.grey200,
   },
   tipsTitle: {
-    fontSize: theme.typography.fontSize.base,
+    fontSize: theme.typography.fontSize.md,
     fontWeight: theme.typography.fontWeight.bold,
     color: theme.colors.textPrimary,
     marginBottom: theme.spacing.sm,

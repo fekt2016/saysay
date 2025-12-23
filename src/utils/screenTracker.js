@@ -1,5 +1,7 @@
 let currentScreenName = 'Unknown';
-let currentRouteParams = null;export const setCurrentScreen = (screenName, params = null) => {
+let currentRouteParams = null;
+
+export const setCurrentScreen = (screenName, params = null) => {
   currentScreenName = screenName || 'Unknown';
   currentRouteParams = params;
 
@@ -8,4 +10,11 @@ let currentRouteParams = null;export const setCurrentScreen = (screenName, param
   }
 };
 
+export const getCurrentScreen = () => {
+  return currentScreenName;
+};
+
+export const getCurrentRouteParams = () => {
+  return currentRouteParams;
+};
 

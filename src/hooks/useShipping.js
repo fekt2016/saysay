@@ -1,3 +1,6 @@
+import { useQuery, useMutation } from '@tanstack/react-query';
+import shippingService from '../services/shippingApi';
+
 export const useGetPickupCenters = (city = null) => {
   return useQuery({
     queryKey: ['pickup-centers', city],
@@ -18,18 +21,27 @@ export const useGetPickupCenters = (city = null) => {
       }
       return [];
     },
+    enabled: !!city, // Only run query when city is provided
+    staleTime: 1000 * 60 * 5, // Cache for 5 minutes
+    retry: 2,
   });
-};export const useCalculateShippingQuote = () => {
+};
+
+export const useCalculateShippingQuote = () => {
   return useMutation({
     mutationFn: ({ buyerCity, items, method, pickupCenterId, deliverySpeed }) => {
       return shippingService.calculateShippingQuote(buyerCity, items, method, pickupCenterId, deliverySpeed);
     },
   });
-};export const useCalcShipping = () => {
+};
+
+export const useCalcShipping = () => {
   return useMutation({
     mutationFn: (data) => shippingService.calcShipping(data),
   });
-};export const useGetShippingOptions = (params) => {
+};
+
+export const useGetShippingOptions = (params) => {
   return useQuery({
     queryKey: ['shipping-options', params],
     queryFn: async () => {

@@ -61,16 +61,58 @@ export const useCreateOrder = () => {
   return useMutation({
     mutationFn: async (data) => {
       try {
+        console.log('[useCreateOrder] Creating order...');
         const response = await orderService.createOrder(data);
-        queryClient.invalidateQueries({ queryKey: ["orders"] });
+        console.log('[useCreateOrder] ✅ Order created successfully');
         return response;
       } catch (error) {
-        console.error("Order fetch error:", error);
+        console.error("[useCreateOrder] ❌ Order creation error:", {
+          message: error.message,
+          response: error.response?.data,
+          status: error.response?.status,
+          isAxiosError: error.isAxiosError,
+          stack: error.stack,
+        });
+        // Re-throw the error so it can be handled by onError callback
         throw error;
       }
     },
     onSuccess: (data) => {
+      // Invalidate order queries
       queryClient.invalidateQueries({ queryKey: ["orders"] });
+      queryClient.invalidateQueries({ queryKey: ["order"] });
+      
+      // CRITICAL: Invalidate wallet balance if order was paid with credit balance
+      // This ensures the UI updates immediately to show the deducted amount
+      const order = data?.data?.order || data?.order || data?.data || data;
+      const paymentMethod = order?.paymentMethod;
+      const isWalletPayment = paymentMethod === 'credit_balance' || paymentMethod === 'wallet';
+      
+      if (isWalletPayment) {
+        console.log('[useCreateOrder] 💰 Wallet payment detected - invalidating wallet balance');
+        queryClient.invalidateQueries({ queryKey: ["wallet-balance"] });
+        queryClient.invalidateQueries({ queryKey: ["creditBalance"] });
+        // Immediately refetch to update UI
+        queryClient.refetchQueries({ queryKey: ["wallet-balance"] });
+      }
+      
+      // CRITICAL: Invalidate product queries to refresh stock
+      // Note: Stock will be reduced after payment, but we invalidate here
+      // to ensure fresh data is fetched when user navigates back
+      queryClient.invalidateQueries({ queryKey: ["products"] });
+      queryClient.invalidateQueries({ queryKey: ["product"] });
+      queryClient.invalidateQueries({ queryKey: ["wishlist"] });
+      // Invalidate all product-related queries (including category-products, seller products, etc.)
+      queryClient.invalidateQueries({ 
+        predicate: (query) => {
+          const key = query.queryKey;
+          return (
+            (Array.isArray(key) && key[0] === 'products') ||
+            (Array.isArray(key) && key[0] === 'product') ||
+            (Array.isArray(key) && key[0] === 'category-products')
+          );
+        },
+      });
     },
   });
 };

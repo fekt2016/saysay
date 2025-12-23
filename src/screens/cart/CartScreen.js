@@ -16,6 +16,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../hooks/useAuth';
 import {
   useGetCart,
@@ -25,7 +26,6 @@ import {
   getCartStructure,
 } from '../../hooks/useCart';
 import { theme } from '../../theme';
-import LogoIcon from '../../components/header/LogoIcon';
 import HeaderAvatar from '../../components/header/HeaderAvatar';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -35,7 +35,7 @@ const CartScreen = () => {
   const { user, isAuthenticated } = useAuth();
   const insets = useSafeAreaInsets();
   const [refreshing, setRefreshing] = useState(false);
-  const [quantityInputs, setQuantityInputs] = useState();
+  const [quantityInputs, setQuantityInputs] = useState({});
 
   const { data, isLoading: isCartLoading, isError, refetch } = useGetCart();
   const { total: subTotal, count } = useCartTotals();
@@ -52,7 +52,15 @@ const CartScreen = () => {
 
   useLayoutEffect(() => {
     navigation.setOptions({
-      headerLeft: () => <LogoIcon />,
+      headerLeft: () => (
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={{ marginLeft: theme.spacing.md, padding: theme.spacing.xs }}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="arrow-back" size={24} color={theme.colors.text} />
+        </TouchableOpacity>
+      ),
       headerTitle: `Cart (${count || 0})`,
       headerRight: () => <HeaderAvatar />,
     });

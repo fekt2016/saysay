@@ -26,7 +26,7 @@ import { theme } from '../../theme';const ChangePasswordScreen = ({ navigation }
     newPassword: '',
     confirmPassword: '',
   });
-  const [errors, setErrors] = useState();
+  const [errors, setErrors] = useState({});
 
   useLayoutEffect(() => {
     navigation.setOptions({
@@ -104,7 +104,7 @@ import { theme } from '../../theme';const ChangePasswordScreen = ({ navigation }
           newPassword: '',
           confirmPassword: '',
         });
-                setErrors();
+                setErrors({});
 
                 navigation.goBack();
               },
@@ -132,7 +132,7 @@ import { theme } from '../../theme';const ChangePasswordScreen = ({ navigation }
   const updateField = (field, value) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
 
-    if (errors[field]) {
+    if (errors && errors[field]) {
       setErrors((prev) => ({ ...prev, [field]: null }));
     }
   };

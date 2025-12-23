@@ -1,43 +1,15 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import * as SecureStore from 'expo-secure-store';
 import authApi from '../services/authApi';
 import logger from '../utils/logger';
 
-const extractDeviceIdFromToken = async (token) => {
-  try {
-    const parts = token.split('.');
-    if (parts.length === 3) {
-      const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
-      if (payload?.deviceId) {
-        await SecureStore.setItemAsync('device_id', payload.deviceId);
-        logger.debug('✅ [Auth] Device ID stored');
-      }
-    }
-  } catch (e) {
-    logger.warn('⚠️ [Auth] Could not extract device ID from token:', e.message);
-  }
-};
-
-const storeAuthData = async (token, userData) => {
-  await SecureStore.setItemAsync('user_token', token);
-  await SecureStore.setItemAsync('user_data', JSON.stringify(userData));
-  await extractDeviceIdFromToken(token);
-  
-  const storedToken = await SecureStore.getItemAsync('user_token');
-  if (storedToken !== token) {
-    throw new Error('Failed to store authentication token');
-  }
-};
+// SECURITY: Cookie-only authentication - no token storage
+// Tokens are in HTTP-only cookies set by backend
+// No SecureStore, AsyncStorage, or any client-side token storage
 
 const clearAuthData = async () => {
-  try {
-    await SecureStore.deleteItemAsync('user_token');
-    await SecureStore.deleteItemAsync('user_data');
-    await SecureStore.deleteItemAsync('device_id');
-    logger.debug('✅ [Auth] Secure storage cleared');
-  } catch (storageError) {
-    logger.error('❌ [Auth] Error clearing secure storage:', storageError);
-  }
+  // SECURITY: No token storage to clear - cookies are managed by backend
+  // Backend logout endpoint clears the cookie
+  logger.debug('✅ [Auth] Cookie-based auth - no local storage to clear');
 };
 
 export const useAuth = () => {
@@ -50,28 +22,17 @@ export const useAuth = () => {
   } = useQuery({
     queryKey: ['auth', 'user'],
     queryFn: async () => {
-      const token = await SecureStore.getItemAsync('user_token');
-      
-      if (!token) {
-        // Cancel all active queries to prevent API calls without token
-        queryClient.cancelQueries();
-        // Remove all queries to prevent refetching
-        queryClient.removeQueries();
-        // Set auth user to null
-        queryClient.setQueryData(['auth', 'user'], null);
-        return null;
-      }
-
+      // SECURITY: Cookie-only authentication - no token check needed
+      // Backend reads from HTTP-only cookie automatically
       try {
         const response = await authApi.getCurrentUser();
         const userData = response?.data?.data || response?.data || response;
 
         if (userData && (userData._id || userData.id)) {
-          await SecureStore.setItemAsync('user_data', JSON.stringify(userData));
           return userData;
         }
 
-        await clearAuthData();
+        // No user data - cookie may be expired or missing
         return null;
       } catch (error) {
         const isTimeout = error?.code === 'ECONNABORTED' || error?.message?.includes('timeout');
@@ -79,26 +40,19 @@ export const useAuth = () => {
         const isUnauthorized = error?.response?.status === 401;
 
         if (isUnauthorized) {
-          logger.error('❌ [Auth] Token validation error: 401 Unauthorized');
-          await clearAuthData();
+          // 401 is expected when cookie is expired/missing - not an error, just unauthenticated state
+          if (__DEV__) {
+            logger.debug('[Auth] User unauthenticated (401) - cookie may be expired or missing');
+          }
           return null;
         }
 
         if (isTimeout || isNetworkError) {
-          logger.warn('⚠️ [Auth] Network/timeout error, using cached data');
-          const storedUserData = await SecureStore.getItemAsync('user_data');
-          if (storedUserData) {
-            try {
-              return JSON.parse(storedUserData);
-            } catch (e) {
-              logger.error('❌ [Auth] Error parsing cached user data:', e);
-              await clearAuthData();
-              return null;
-            }
-          }
+          logger.warn('⚠️ [Auth] Network/timeout error - cannot verify authentication');
+          // Return null on network errors - don't assume user is authenticated
+          return null;
         }
 
-        await clearAuthData();
         return null;
       }
     },
@@ -130,20 +84,15 @@ export const useAuth = () => {
         };
       }
 
-      const token = response?.token;
-      const userData = response?.user;
-
-      if (!token) {
-        throw new Error('Login failed: No authentication token received');
-      }
+      // SECURITY: Token is in HTTP-only cookie, NOT in response
+      // Backend sets cookie automatically - no token storage needed
+      const userData = response?.user || response?.data?.user;
 
       if (!userData || !userData.id) {
         throw new Error('Login failed: No user data received');
       }
 
-      await storeAuthData(token, userData);
-
-      logger.debug('✅ [Login] Login successful, token stored');
+      logger.debug('✅ [Login] Login successful, cookie set by backend');
       logger.debug('👤 [Login] User logged in:', {
         id: userData.id || userData._id,
         email: userData.email,
@@ -190,20 +139,14 @@ export const useAuth = () => {
       logger.debug('🔐 [2FA Login] Verifying 2FA code');
       const response = await authApi.verify2FALogin(loginSessionId, twoFactorCode);
 
-      const token = response?.token;
-      const userData = response?.user;
-
-      if (!token) {
-        throw new Error('2FA verification failed: No authentication token received');
-      }
+      // SECURITY: Token is in HTTP-only cookie, NOT in response
+      const userData = response?.user || response?.data?.user;
 
       if (!userData || !userData.id) {
         throw new Error('2FA verification failed: No user data received');
       }
 
-      await storeAuthData(token, userData);
-
-      logger.debug('✅ [2FA Login] 2FA verified, login successful');
+      logger.debug('✅ [2FA Login] 2FA verified, cookie set by backend');
       logger.debug('👤 [2FA Login] User logged in:', {
         id: userData.id || userData._id,
         email: userData.email,
@@ -242,25 +185,17 @@ export const useAuth = () => {
         };
       }
 
-      const token = response?.token;
+      // SECURITY: Token is in HTTP-only cookie, NOT in response
       const userData = response?.user || response?.data?.user || response?.data || response;
 
-      logger.debug('🔐 [OTP] Token extracted:', token ? 'Present' : 'MISSING');
       logger.debug('🔐 [OTP] User data extracted:', userData ? 'Present' : 'Missing');
-
-      if (!token) {
-        logger.error('❌ [OTP] No token in response!');
-        throw new Error('Login failed: No authentication token received');
-      }
 
       if (!userData || !userData.id) {
         logger.error('❌ [OTP] No user data in response!');
         throw new Error('Login failed: No user data received');
       }
 
-      await storeAuthData(token, userData);
-
-      logger.debug('✅ [OTP] Token and user data stored and verified successfully');
+      logger.debug('✅ [OTP] Login successful, cookie set by backend');
       logger.debug('👤 [OTP Login] User logged in:', {
         id: userData.id || userData._id,
         email: userData.email,

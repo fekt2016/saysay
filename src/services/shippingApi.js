@@ -30,6 +30,20 @@ const shippingService = {
     return response.data;
   },
 
+
+  calcShipping: async (data) => {
+    const response = await api.post('/shipping/calc-shipping', data);
+    return response.data;
+  },
+
   /**
-   * Calculate shipping fee based on neighborhood
-   * POST /api/v1/shipping/calc-shipping
+   * Get shipping options based on neighborhood, city, weight, and fragile status
+   * GET /api/v1/shipping/options
+   */
+  getShippingOptions: async (params) => {
+    const response = await api.get('/shipping/options', { params });
+    return response.data;
+  },
+};
+
+export default shippingService;

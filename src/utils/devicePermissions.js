@@ -1,7 +1,8 @@
 import { Alert, Linking, Platform } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
-import * as Notifications from 'expo-notifications';export const PERMISSION_TYPES = {
+import * as Notifications from 'expo-notifications';
+import logger from './logger';export const PERMISSION_TYPES = {
   CAMERA: 'camera',
   PHOTO_LIBRARY: 'photoLibrary',
   LOCATION: 'location',
@@ -39,7 +40,7 @@ import * as Notifications from 'expo-notifications';export const PERMISSION_TYPE
         return PERMISSION_STATUS.UNDETERMINED;
     }
   } catch (error) {
-    console.error(`Error checking ${permissionType} permission:`, error);
+    logger.error(`Error checking ${permissionType} permission:`, error);
     return PERMISSION_STATUS.UNDETERMINED;
   }
 };

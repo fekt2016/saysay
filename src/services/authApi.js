@@ -1,31 +1,29 @@
 import api from './api';
+import logger from '../utils/logger';
 
 const authApi = {
   
   login: async (email, password) => {
-    console.log('🔐 [Login] Attempting login with email:', email);
+    logger.debug('🔐 [Login] Attempting login with email:', email);
     const response = await api.post('/users/login', { email, password });
-    console.log('🔐 [Login] Response status:', response.data?.status);
+    logger.debug('🔐 [Login] Response status:', response.data?.status);
     return response.data;
   },
 
   
   verify2FALogin: async (loginSessionId, twoFactorCode) => {
-    console.log('🔐 [2FA Login] Verifying 2FA code');
+    logger.debug('🔐 [2FA Login] Verifying 2FA code');
     const response = await api.post('/users/verify-2fa-login', {
       loginSessionId,
       twoFactorCode,
     });
-    console.log('🔐 [2FA Login] Response status:', response.data?.status);
+    logger.debug('🔐 [2FA Login] Response status:', response.data?.status);
     return response.data;
   },
 
   
   sendOtp: async (loginId) => {
-    console.log('\n');
-    console.log('📧 [OTP] ════════════════════════════════════════════════════════════');
-    console.log('📧 [OTP] Requesting OTP for loginId:', loginId);
-    console.log('📧 [OTP] ════════════════════════════════════════════════════════════');
+    logger.debug('📧 [OTP] Requesting OTP for loginId:', loginId);
     
     const response = await api.post('/users/send-otp', { loginId });
     
@@ -33,25 +31,10 @@ const authApi = {
     const otp = response.data?.otp;
     
     if (otp) {
-      console.log('\n');
-      console.log('✅ [OTP] ════════════════════════════════════════════════════════════');
-      console.log('✅ [OTP] ⭐ OTP RECEIVED FROM BACKEND ⭐');
-      console.log('✅ [OTP] ════════════════════════════════════════════════════════════');
-      console.log('✅ [OTP] ⭐ OTP CODE:', otp, '⭐');
-      console.log('✅ [OTP] ════════════════════════════════════════════════════════════');
-      console.log('✅ [OTP] Use this code to verify your login');
-      console.log('═══════════════════════════════════════════════════════════');
-      console.log('\n');
+      logger.debug('✅ [OTP] OTP received from backend');
     } else {
-      console.log('\n');
-      console.log('⚠️ [OTP] ════════════════════════════════════════════════════════════');
-      console.log('⚠️ [OTP] OTP not found in API response');
-      console.log('⚠️ [OTP] ════════════════════════════════════════════════════════════');
-      console.log('⚠️ [OTP] Check BACKEND console logs for OTP');
-      console.log('⚠️ [OTP] Backend should log OTP when generating it');
-      console.log('⚠️ [OTP] Response structure:', JSON.stringify(response.data, null, 2));
-      console.log('═══════════════════════════════════════════════════════════');
-      console.log('\n');
+      logger.warn('⚠️ [OTP] OTP not found in API response. Check backend logs for OTP.');
+      logger.debug('⚠️ [OTP] Response structure:', response.data);
     }
     
     return response.data;
@@ -59,7 +42,7 @@ const authApi = {
 
   
   verifyOtp: async (loginId, otp, password, twoFactorCode = null) => {
-    console.log('🔐 [OTP] Verifying OTP:', { 
+    logger.debug('🔐 [OTP] Verifying OTP:', { 
       loginId, 
       otp: otp ? '***' + otp.slice(-2) : 'N/A',
       has2FA: twoFactorCode ? 'Yes' : 'No'
@@ -79,11 +62,11 @@ const authApi = {
     
     
     if (response.data?.status === '2fa_required' || response.data?.requires2FA) {
-      console.log('🔐 [2FA] Two-factor authentication required');
+      logger.debug('🔐 [2FA] Two-factor authentication required');
       return response.data;
     }
     
-    console.log('✅ [OTP] Verification response:', response.data?.status || 'success');
+    logger.debug('✅ [OTP] Verification response:', response.data?.status || 'success');
     return response.data;
   },
 
@@ -132,7 +115,7 @@ const authApi = {
     } catch (error) {
       
       
-      console.warn('Logout API call failed or timed out, proceeding with local cleanup:', error.message);
+      logger.warn('Logout API call failed or timed out, proceeding with local cleanup:', error.message);
       return { status: 'success', message: 'Local logout completed' };
     }
   },
@@ -147,12 +130,12 @@ const authApi = {
     } catch (error) {
       
       if (error.code === 'ECONNABORTED') {
-        console.error('[Auth] ❌ Timeout checking user authentication');
-        console.error('[Auth] ❌ Backend is not responding or unreachable');
-        console.error('[Auth] 🔧 Check backend connectivity before retrying');
+        logger.error('[Auth] ❌ Timeout checking user authentication');
+        logger.error('[Auth] ❌ Backend is not responding or unreachable');
+        logger.error('[Auth] 🔧 Check backend connectivity before retrying');
       } else if (error.code === 'ERR_NETWORK' || !error.response) {
-        console.error('[Auth] ❌ Network error - cannot reach backend');
-        console.error('[Auth] 🔧 Verify backend is running and network is connected');
+        logger.error('[Auth] ❌ Network error - cannot reach backend');
+        logger.error('[Auth] 🔧 Verify backend is running and network is connected');
       }
       throw error; 
     }
@@ -160,12 +143,11 @@ const authApi = {
 
   
   sendPasswordResetOtp: async (loginId) => {
-    console.log('📧 [OTP] Requesting Password Reset OTP for loginId:', loginId);
+    logger.debug('📧 [OTP] Requesting Password Reset OTP for loginId:', loginId);
     const response = await api.post('/users/forgot-password', { loginId });
     
     
-    console.log('📧 [OTP] Complete Password Reset response:', JSON.stringify(response.data, null, 2));
-    console.log('📧 [OTP] Response keys:', Object.keys(response.data || {}));
+    logger.debug('📧 [OTP] Password Reset response keys:', Object.keys(response.data || {}));
     
     
     const otpLocations = [
@@ -182,12 +164,9 @@ const authApi = {
     const foundOtp = otpLocations.find(otp => otp !== undefined && otp !== null);
     
     if (foundOtp) {
-      console.log('✅ [OTP] ===========================================');
-      console.log('✅ [OTP] PASSWORD RESET OTP FROM BACKEND:', foundOtp);
-      console.log('✅ [OTP] ===========================================');
+      logger.debug('✅ [OTP] PASSWORD RESET OTP received from backend');
     } else {
-      console.log('⚠️ [OTP] OTP not found in response. Check backend logs for OTP.');
-      console.log('⚠️ [OTP] Backend should log OTP when generating it.');
+      logger.warn('⚠️ [OTP] OTP not found in response. Check backend logs for OTP.');
     }
     
     return response.data;
@@ -195,12 +174,12 @@ const authApi = {
 
   
   verifyPasswordResetOtp: async (loginId, otp) => {
-    console.log('🔐 [OTP] Verifying Password Reset OTP:', { loginId, otp: otp ? '***' + otp.slice(-2) : 'N/A' });
+    logger.debug('🔐 [OTP] Verifying Password Reset OTP:', { loginId, otp: otp ? '***' + otp.slice(-2) : 'N/A' });
     const response = await api.post('/users/verify-reset-otp', {
       loginId,
       otp,
     });
-    console.log('✅ [OTP] Password Reset Verification response:', response.data?.status || 'success');
+    logger.debug('✅ [OTP] Password Reset Verification response:', response.data?.status || 'success');
     return response.data;
   },
 

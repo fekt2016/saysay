@@ -40,6 +40,7 @@ import TermsScreen from '../screens/info/TermsScreen';
 import { defaultHeaderOptions } from './headerConfig';
 import { useAuth } from '../hooks/useAuth';
 import { theme } from '../theme';
+import { hideTabBarOptions, hideTabBarModalOptions } from './tabVisibility';
 
 const Stack = createNativeStackNavigator();
 
@@ -94,6 +95,7 @@ const AccountStack = () => {
           presentation: 'modal',
           gestureEnabled: true,
           title: 'Edit Profile',
+          ...hideTabBarModalOptions,
         }}
       />
       <Stack.Screen
@@ -158,6 +160,7 @@ const AccountStack = () => {
         options={{ 
           presentation: 'card',
           title: 'Security Settings',
+          ...hideTabBarOptions,
         }}
       />
       <Stack.Screen
@@ -166,6 +169,7 @@ const AccountStack = () => {
         options={{ 
           presentation: 'card',
           title: 'Change Password',
+          ...hideTabBarOptions,
         }}
       />
       <Stack.Screen
@@ -174,6 +178,7 @@ const AccountStack = () => {
         options={{ 
           presentation: 'card',
           title: 'Reset PIN',
+          ...hideTabBarOptions,
         }}
       />
       <Stack.Screen
@@ -182,6 +187,7 @@ const AccountStack = () => {
         options={{ 
           presentation: 'card',
           title: 'Setup Two-Factor Authentication',
+          ...hideTabBarOptions,
         }}
       />
       <Stack.Screen
@@ -190,6 +196,7 @@ const AccountStack = () => {
         options={{ 
           presentation: 'card',
           title: 'Device Management',
+          ...hideTabBarOptions,
         }}
       />
       <Stack.Screen
@@ -262,6 +269,7 @@ const AccountStack = () => {
         options={{ 
           presentation: 'card',
           title: 'Track Order',
+          ...hideTabBarOptions,
         }}
       />
       <Stack.Screen
@@ -271,6 +279,7 @@ const AccountStack = () => {
           presentation: 'card',
           headerShown: true,
           headerBackTitleVisible: false,
+          ...hideTabBarOptions,
         }}
       />
       <Stack.Screen
@@ -303,6 +312,7 @@ const AccountStack = () => {
         options={{ 
           presentation: 'modal',
           headerShown: false,
+          ...hideTabBarModalOptions,
         }}
       />
       <Stack.Screen

@@ -29,10 +29,18 @@ const ProfileScreen = ({ navigation }) => {
   
   // Get credit balance
   const { data: creditBalanceData } = useCreditBalance();
-  const creditBalance = creditBalanceData?.data?.wallet?.balance || 
-                        creditBalanceData?.data?.creditbalance?.balance || 
-                        creditBalanceData?.data?.balance || 
+  // Use availableBalance first (what user can actually spend), then fallback to balance
+  const creditBalance = creditBalanceData?.data?.wallet?.availableBalance ?? 
+                        creditBalanceData?.data?.wallet?.balance ?? 
+                        creditBalanceData?.data?.creditbalance?.availableBalance ??
+                        creditBalanceData?.data?.creditbalance?.balance ?? 
+                        creditBalanceData?.data?.balance ?? 
                         0;
+
+  // Ensure creditBalance is a valid number before using toFixed
+  const displayBalance = typeof creditBalance === 'number' && !isNaN(creditBalance)
+    ? creditBalance.toFixed(2)
+    : '0.00';
 
   const [formData, setFormData] = useState({
     name: '',
@@ -141,7 +149,7 @@ const ProfileScreen = ({ navigation }) => {
     {
       icon: 'wallet-outline',
       label: 'Credit Balance',
-      description: `Balance: GH₵${creditBalance.toFixed(2)}`,
+      description: `Balance: GH₵${displayBalance}`,
       screen: 'CreditBalance',
       color: theme.colors.green || theme.colors.primary,
     },

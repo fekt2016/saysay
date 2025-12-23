@@ -1,14 +1,15 @@
 import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import HomeScreen from '../screens/home/HomeScreen';
+import SearchScreen from '../screens/search/SearchScreen';
 import ProductDetailScreen from '../screens/products/ProductDetailScreen';
+import SellersListScreen from '../screens/sellers/SellersListScreen';
+import SellerScreen from '../screens/sellers/SellerScreen';
 // import ProductListScreen from '../screens/products/ProductListScreen';
 // import BestSellersScreen from '../screens/home/BestSellersScreen';
 // import NewArrivalsScreen from '../screens/home/NewArrivalsScreen';
 // import DealsScreen from '../screens/home/DealsScreen';
 // import ReviewScreen from '../screens/reviews/ReviewScreen';
-// import SellersListScreen from '../screens/sellers/SellersListScreen';
-// import SellerScreen from '../screens/sellers/SellerScreen';
 import { defaultHeaderOptions } from './headerConfig';
 
 const Stack = createNativeStackNavigator();
@@ -25,12 +26,35 @@ const HomeStack = () => {
           headerShown: true,
         }}
       />
+      <Stack.Screen 
+        name="Search" 
+        component={SearchScreen}
+        options={{
+          title: 'Search',
+        }}
+      />
       <Stack.Screen
         name="ProductDetail"
         component={ProductDetailScreen}
         options={{ 
           presentation: 'card',
           title: 'Product Details',
+        }}
+      />
+      <Stack.Screen
+        name="SellersList"
+        component={SellersListScreen}
+        options={{ 
+          presentation: 'card',
+          title: 'Sellers',
+        }}
+      />
+      <Stack.Screen
+        name="Seller"
+        component={SellerScreen}
+        options={{ 
+          presentation: 'card',
+          title: 'Seller',
         }}
       />
       {/* <Stack.Screen
@@ -71,22 +95,6 @@ const HomeStack = () => {
         options={{ 
           presentation: 'card',
           title: 'Reviews',
-        }}
-      />
-      <Stack.Screen
-        name="SellersList"
-        component={SellersListScreen}
-        options={{ 
-          presentation: 'card',
-          title: 'Sellers',
-        }}
-      />
-      <Stack.Screen
-        name="Seller"
-        component={SellerScreen}
-        options={{ 
-          presentation: 'card',
-          title: 'Seller',
         }}
       /> */}
     </Stack.Navigator>

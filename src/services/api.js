@@ -1,5 +1,6 @@
 import axios from 'axios';
-import * as SecureStore from 'expo-secure-store';
+import { Platform } from 'react-native';
+// SECURITY: Removed SecureStore import - no token storage
 import { getApiBaseUrl } from '../utils/getBaseUrl';
 import { getCurrentScreen, getCurrentRouteParams } from '../utils/screenTracker';
 import logger from '../utils/logger';
@@ -97,9 +98,12 @@ const isPublicRoute = (path, method = 'get') => {
   return false;
 };
 
+// SECURITY: Cookie-only authentication - tokens are in HTTP-only cookies
+// withCredentials: true ensures cookies are sent with all requests
 const api = axios.create({
   baseURL: getApiBaseUrl(),
   timeout: API_CONFIG.TIMEOUT,
+  withCredentials: true, // CRITICAL: Required for cookie-based authentication
   headers: {
     'Content-Type': 'application/json',
   },
@@ -107,16 +111,24 @@ const api = axios.create({
 
 if (__DEV__) {
   const baseUrl = getApiBaseUrl();
+  const baseUrlWithoutApi = baseUrl.replace('/api/v1', '');
   const envUrl = process.env.EXPO_PUBLIC_API_URL;
   logger.debug('[API] ========================================');
   logger.debug('[API] BASE URL =', baseUrl);
+  logger.debug('[API] Base URL (without /api/v1) =', baseUrlWithoutApi);
   logger.debug('[API] EXPO_PUBLIC_API_URL =', envUrl || 'NOT SET (using default)');
   logger.debug('[API] Timeout =', API_CONFIG.TIMEOUT, 'ms');
-  
+  logger.debug('[API] Platform =', Platform.OS);
   
   if (baseUrl.includes('localhost') || baseUrl.includes('127.0.0.1')) {
-    logger.debug('[API] ℹ️  Using localhost - OK for iOS Simulator and Android Emulator');
+    logger.debug('[API] ℹ️  Using localhost - OK for iOS Simulator');
     logger.debug('[API] ℹ️  For physical devices, use network IP via EXPO_PUBLIC_API_URL');
+  } else if (baseUrl.includes('10.0.2.2')) {
+    logger.debug('[API] ℹ️  Using 10.0.2.2 - OK for Android Emulator');
+    logger.debug('[API] ℹ️  This maps to host machine\'s localhost');
+  } else {
+    logger.debug('[API] ℹ️  Using network IP - OK for physical devices');
+    logger.debug('[API] ℹ️  Ensure device and backend are on same WiFi network');
   }
   logger.debug('[API] ========================================');
 }
@@ -153,85 +165,45 @@ api.interceptors.request.use(
       return config;
     }
 
+    // SECURITY: Cookie-only authentication - no token storage or manual headers
+    // Cookies are automatically sent via withCredentials: true
+    // Backend reads from req.cookies.main_jwt (or seller_jwt/admin_jwt based on route)
     
+    // Add platform header (non-sensitive metadata)
+    config.headers['x-platform'] = 'saysay';
+    config.headers['x-mobile'] = 'true';
+    
+    // Add screen tracking headers (non-sensitive metadata)
     try {
-      const token = await SecureStore.getItemAsync('user_token');
-      if (token && token.trim().length > 0) {
-        config.headers.Authorization = `Bearer ${token}`;
-        
-        
+      const currentScreen = getCurrentScreen();
+      const routeParams = getCurrentRouteParams();
+      config.headers['x-client-app'] = 'Saysay';
+      config.headers['x-client-screen'] = currentScreen || 'Unknown';
+      if (routeParams && Object.keys(routeParams).length > 0) {
         try {
-          const storedDeviceId = await SecureStore.getItemAsync('device_id');
-          if (storedDeviceId) {
-            config.headers['x-device-id'] = storedDeviceId;
-          }
-        } catch (storeError) {
-          
-        }
-        
-        
-        config.headers['x-platform'] = 'eazmainapp';
-        
-        config.headers['x-mobile'] = 'true';
-        
-        
-        const currentScreen = getCurrentScreen();
-        const routeParams = getCurrentRouteParams();
-        config.headers['x-client-app'] = 'Saysay';
-        config.headers['x-client-screen'] = currentScreen;
-        if (routeParams && Object.keys(routeParams).length > 0) {
-          
-          try {
-            const paramsStr = JSON.stringify(routeParams);
-            if (paramsStr.length < 200) {
-              config.headers['x-client-screen-params'] = paramsStr;
-            } else {
-              
-              const essential = {};
-              if (routeParams.orderId) essential.orderId = routeParams.orderId;
-              if (routeParams.productId) essential.productId = routeParams.productId;
-              if (routeParams.categoryId) essential.categoryId = routeParams.categoryId;
-              config.headers['x-client-screen-params'] = JSON.stringify(essential);
-            }
-          } catch (e) {
-            
-          }
-        }
-        
-        
-        if (normalizedPath.includes('/payment') || normalizedPath.includes('/order')) {
-          logger.debug(`[API] 🔐 AUTH TOKEN ATTACHED for: ${method.toUpperCase()} ${normalizedPath}`);
-          
-        } else if (__DEV__) {
-          logger.debug(`[API] ✅ Token attached for: ${method.toUpperCase()} ${normalizedPath}`);
-        }
-      } else {
-        // No token found for protected route - reject the request to prevent 401 loop
-        try {
-          const userData = await SecureStore.getItemAsync('user_data');
-          if (userData) {
-            logger.error(`[API] ❌ NO TOKEN FOUND but user data exists - INCONSISTENT STATE`);
-            logger.error(`[API] ❌ User should log out and log back in to fix this`);
-            logger.error(`[API] ❌ Protected route: ${method.toUpperCase()} ${normalizedPath}`);
+          const paramsStr = JSON.stringify(routeParams);
+          if (paramsStr.length < 200) {
+            config.headers['x-client-screen-params'] = paramsStr;
           } else {
-            logger.error(`[API] ❌ NO TOKEN FOUND for protected route: ${method.toUpperCase()} ${normalizedPath}`);
-            logger.error(`[API] ❌ User is not logged in`);
+            const essential = {};
+            if (routeParams.orderId) essential.orderId = routeParams.orderId;
+            if (routeParams.productId) essential.productId = routeParams.productId;
+            if (routeParams.categoryId) essential.categoryId = routeParams.categoryId;
+            config.headers['x-client-screen-params'] = JSON.stringify(essential);
           }
-        } catch (checkError) {
-          logger.error(`[API] ❌ NO TOKEN FOUND for protected route: ${method.toUpperCase()} ${normalizedPath}`, checkError);
+        } catch (e) {
+          logger.warn('[API] ⚠️ Error stringifying route params:', e);
         }
-        
-        if (normalizedPath.includes('/payment') || normalizedPath.includes('/order') || normalizedPath.includes('/creditbalance')) {
-          logger.error(`[API] ❌ This will cause a 401 error!`);
-          logger.error(`[API] 🔧 SOLUTION: User must log out and log back in`);
-        }
-        
-        // Note: We don't reject here to allow the request to go through
-        // The 401 response will be handled by the response interceptor
-        // which will clear auth data and trigger navigation to login
       }
-    } catch (error) {
-      logger.error('[API] ❌ Error getting token from SecureStore:', error);
+    } catch (screenError) {
+      logger.warn('[API] ⚠️ Error getting screen info:', screenError);
+      config.headers['x-client-app'] = 'Saysay';
+      config.headers['x-client-screen'] = 'Unknown';
+    }
+    
+    // Cookie is automatically sent - no manual token attachment needed
+    if (__DEV__) {
+      logger.debug(`[API] Cookie will be sent automatically for ${method.toUpperCase()} ${normalizedPath}`);
     }
     return config;
   },
@@ -254,22 +226,42 @@ api.interceptors.response.use(
     
     if (error.code === 'ECONNABORTED') {
       const timeout = error.config?.timeout || API_CONFIG.TIMEOUT;
+      const actualBaseUrl = baseURL.replace('/api/v1', '');
       logger.error(`[API] ❌ TIMEOUT: ${method} ${url} - Request exceeded ${timeout}ms`);
       logger.error(`[API] ❌ Backend is too slow or unreachable`);
       logger.error(`[API] ❌ Base URL: ${baseURL}`);
+      logger.error(`[API] ❌ Actual Backend URL: ${actualBaseUrl}`);
       if (__DEV__) {
         logger.debug(`[API] 🔧 TROUBLESHOOTING:`);
         logger.debug(`[API]   1. Check if backend is running: cd backend && npm start`);
-        logger.debug(`[API]   2. Test backend connectivity: curl ${baseURL.replace('/api/v1', '')}/health-check`);
-        logger.debug(`[API]   3. Verify IP address is correct: ${baseURL}`);
+        logger.debug(`[API]   2. Test backend connectivity: curl ${actualBaseUrl}/health-check`);
+        logger.debug(`[API]   3. Current Base URL: ${actualBaseUrl}`);
         logger.debug(`[API]   4. Check network connection (WiFi/network settings)`);
-        logger.debug(`[API]   5. For iOS Simulator: Try http://localhost:4000`);
-        logger.debug(`[API]   6. For Android Emulator: Use http://10.0.2.2:4000`);
-        logger.debug(`[API]   7. For physical devices: Use your Mac's network IP (check backend logs)`);
-        logger.debug(`[API]   8. Set EXPO_PUBLIC_API_URL to override: EXPO_PUBLIC_API_URL=http://YOUR_IP:4000`);
+        logger.debug(`[API]   5. Verify device and backend are on same WiFi network`);
+        if (Platform.OS === 'ios') {
+          logger.debug(`[API]   6. For iOS Simulator: Try http://localhost:4000`);
+          logger.debug(`[API]   7. For iOS Device: Use your Mac's network IP`);
+        } else if (Platform.OS === 'android') {
+          logger.debug(`[API]   6. For Android Emulator: Use http://10.0.2.2:4000`);
+          logger.debug(`[API]   7. For Android Device: Use your Mac's network IP`);
+        }
+        logger.debug(`[API]   8. Set EXPO_PUBLIC_API_URL in .env: EXPO_PUBLIC_API_URL=${actualBaseUrl}`);
+        logger.debug(`[API]   9. Restart Expo with cache cleared: npx expo start -c`);
       }
     } else if (error.response) {
-      logger.error(`[API] ❌ ${method} ${url} - ${error.response.status} ${error.response.statusText}`, error.response.data);
+      // Don't log 401 on auth endpoints as error - it's expected when user is not authenticated
+      const isAuthEndpoint = url.includes('/users/me') || url.includes('/auth/me') || url.includes('/auth/current-user');
+      const isUnauthorized = error.response.status === 401;
+      
+      if (isUnauthorized && isAuthEndpoint) {
+        // 401 on auth endpoint = user not authenticated (normal state, not an error)
+        if (typeof __DEV__ !== 'undefined' && __DEV__) {
+          logger.debug(`[API] User unauthenticated (401) on ${url} - this is expected when not logged in`);
+        }
+      } else {
+        // Log other errors normally
+        logger.error(`[API] ❌ ${method} ${url} - ${error.response.status} ${error.response.statusText}`, error.response.data);
+      }
     } else if (error.request) {
       logger.error(`[API] ❌ ${method} ${url} - No response received (network error)`);
       logger.error(`[API] ❌ Base URL: ${baseURL}`);
@@ -299,13 +291,17 @@ api.interceptors.response.use(
       
       
       if (isOtpVerification || isOtpError) {
-        logger.warn('[API] ⚠️ 401 from OTP verification - NOT clearing auth data (user is still logging in)');
-        logger.warn('[API] ⚠️ Error:', error.response?.data?.message || 'OTP verification failed');
+        // 401 during OTP verification = normal (user is still in login flow)
+        if (__DEV__) {
+          logger.debug('[API] 401 from OTP verification - NOT clearing auth data (user is still logging in)');
+          logger.debug('[API] Error:', error.response?.data?.message || 'OTP verification failed');
+        }
       } else if (isNotificationEndpoint) {
-        
-        
-        logger.warn('[API] ⚠️ 401 from notification endpoint - NOT clearing auth data');
-        logger.warn('[API] ⚠️ This might be a temporary issue. Error:', error.response?.data?.message || 'Unauthorized');
+        // 401 on notification endpoint = might be cookie issue, not auth failure
+        if (__DEV__) {
+          logger.debug('[API] 401 from notification endpoint - NOT clearing auth data');
+          logger.debug('[API] This might be a temporary issue. Error:', error.response?.data?.message || 'Unauthorized');
+        }
         
       } else {
         // Check if this is a password change error
@@ -313,29 +309,30 @@ api.interceptors.response.use(
         const isPasswordChangeError = errorMessage.includes('recently changed password') || 
                                      errorMessage.includes('changed password');
         
-        logger.error('[API] ❌ 401 Unauthorized - Clearing authentication data');
-        if (isPasswordChangeError) {
-          logger.warn('[API] ⚠️ User recently changed password - session invalidated');
+        // 401 is expected when user is not authenticated - not an error, just unauthenticated state
+        const url = error.config?.url || '';
+        const isAuthEndpoint = url.includes('/auth/me') || url.includes('/auth/current-user');
+        
+        if (isAuthEndpoint) {
+          // Auth endpoint 401 = user is not authenticated (normal state)
+          if (__DEV__) {
+            logger.debug('[API] User unauthenticated (401) on auth endpoint - clearing auth data');
+          }
+        } else {
+          // Other endpoint 401 = might be temporary or session issue
+          if (__DEV__) {
+            logger.debug('[API] 401 on non-auth endpoint - user may need to re-authenticate');
+          }
         }
         
-        try {
-          const tokenExists = await SecureStore.getItemAsync('user_token');
-          const userDataExists = await SecureStore.getItemAsync('user_data');
-          
-          if (tokenExists || userDataExists) {
-            logger.warn('[API] ⚠️ Found stale auth data - clearing it');
-            await SecureStore.deleteItemAsync('user_token');
-            await SecureStore.deleteItemAsync('user_data');
-            await SecureStore.deleteItemAsync('device_id');
-            logger.debug('[API] ✅ Stale auth data cleared');
-            
-            // Note: React Query queries will be cancelled by useAuth hook
-            // when it detects no token. The navigation to login will happen
-            // automatically via AppNavigator when isAuthenticated becomes false.
-            logger.debug('[API] ✅ Auth state will be updated by useAuth hook');
-          }
-        } catch (e) {
-          logger.error('[API] ❌ Error clearing storage:', e);
+        if (isPasswordChangeError && __DEV__) {
+          logger.debug('[API] User recently changed password - session invalidated');
+        }
+        
+        // SECURITY: No token storage - cookies are managed by backend
+        // Just clear React Query cache - backend cookie is cleared by logout endpoint
+        if (__DEV__) {
+          logger.debug('[API] 401 response - cookie-based auth, no local storage to clear');
         }
       }
     }

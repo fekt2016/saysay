@@ -22,9 +22,9 @@ const HelpCenterTabsScreen = ({ navigation, route }) => {
       setSearchTerm(route.params.searchTerm);
     }
     if (route?.params?.category) {
-
+      const categoryParam = route.params.category.toLowerCase();
       const categoryIndex = qaData.findIndex(
-        (cat) => cat.category.toLowerCase().includes(route.params.category.toLowerCase())
+        (cat) => cat?.category?.toLowerCase()?.includes(categoryParam)
       );
       if (categoryIndex !== -1) {
         setActiveTab(categoryIndex);

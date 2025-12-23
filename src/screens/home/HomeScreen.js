@@ -209,7 +209,7 @@ const HomeScreen = () => {
   }, [navigation]);
 
   const handleViewAllProducts = useCallback(() => {
-    navigation.navigate('SearchTab', { screen: 'Search' });
+    navigation.navigate('HomeTab', { screen: 'Search' });
   }, [navigation]);
 
   const handleViewAllCategories = useCallback(() => {

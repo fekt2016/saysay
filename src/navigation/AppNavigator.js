@@ -3,7 +3,6 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { ActivityIndicator, Linking, View, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import * as Notifications from 'expo-notifications';
 import { useAuth } from '../hooks/useAuth';
 import AuthStack from './AuthStack';
 import MainTabs from './MainTabs';
@@ -16,6 +15,7 @@ import { storeNotificationIntent, getAndClearNotificationIntent } from '../utils
 import PushNotificationManager from '../components/PushNotificationManager';
 import { setCurrentScreen } from '../utils/screenTracker';
 import logger from '../utils/logger';
+import ErrorBoundary from '../components/common/ErrorBoundary';
 
 const Stack = createNativeStackNavigator();
 
@@ -233,7 +233,7 @@ const AppNavigator = () => {
   }
 
   return (
-    <>
+    <ErrorBoundary>
       {hasCompletedOnboardingCheck && <PushNotificationManager />}
       <NavigationContainer
         ref={navigationRef}
@@ -284,7 +284,7 @@ const AppNavigator = () => {
           />
         </Stack.Navigator>
       </NavigationContainer>
-    </>
+    </ErrorBoundary>
   );
 };
 

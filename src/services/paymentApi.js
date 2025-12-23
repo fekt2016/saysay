@@ -1,4 +1,5 @@
 import api from './api';
+import logger from '../utils/logger';
 
 const isValidPaystackUrl = (url) => {
   try {
@@ -18,20 +19,16 @@ const paymentApi = {
   
   initializePaystack: async (orderId, amount, email) => {
     try {
-      console.log('[paymentApi] 🔍 DEBUG - Initializing Paystack Payment:');
-      console.log('[paymentApi] Order ID:', orderId, '(type:', typeof orderId, ')');
-      console.log('[paymentApi] Amount:', amount, '(type:', typeof amount, ')');
-      console.log('[paymentApi] Email:', email, '(type:', typeof email, ')');
-      console.log('[paymentApi] Endpoint: POST /payment/paystack/initialize');
+      logger.debug('[paymentApi] Initializing Paystack Payment:', { orderId, amount, email });
       
       
       if (!orderId) {
-        console.error('[paymentApi] ❌ Order ID is missing!');
+        logger.error('[paymentApi] ❌ Order ID is missing!');
         throw new Error('Order ID is required');
       }
       
       if (!email || email.trim() === '') {
-        console.error('[paymentApi] ❌ Email is missing!');
+        logger.error('[paymentApi] ❌ Email is missing!');
         throw new Error('Email is required');
       }
       
@@ -47,18 +44,12 @@ const paymentApi = {
         requestBody.amount = Number(amount);
       }
       
-      console.log('[paymentApi] Request body being sent:', requestBody);
+      logger.debug('[paymentApi] Request body:', requestBody);
       
       const response = await api.post('/payment/paystack/initialize', requestBody);
       
-      console.log('[paymentApi] ✅ Payment initialization successful');
-      console.log('[paymentApi] 🔍 DEBUG - Full response structure:');
-      console.log('[paymentApi] response:', response);
-      console.log('[paymentApi] response.data:', response.data);
-      console.log('[paymentApi] response.data?.data:', response.data?.data);
-      console.log('[paymentApi] response.data?.data?.authorization_url:', response.data?.data?.authorization_url);
-      console.log('[paymentApi] response.data?.authorization_url:', response.data?.authorization_url);
-
+      logger.debug('[paymentApi] ✅ Payment initialization successful');
+      
       
       
       const redirectUrl =
@@ -67,23 +58,22 @@ const paymentApi = {
         response.data?.authorization_url ||
         response.data?.authorizationUrl;
       
-      console.log('[paymentApi] Extracted redirectUrl:', redirectUrl);
+      logger.debug('[paymentApi] Extracted redirectUrl:', redirectUrl);
       
       if (!redirectUrl) {
-        console.error('[paymentApi] ❌ No redirect URL found in response!');
-        console.error('[paymentApi] Full response.data:', JSON.stringify(response.data, null, 2));
+        logger.error('[paymentApi] ❌ No redirect URL found in response!');
         throw new Error('Invalid payment response: missing redirect URL');
       }
       
       if (!isValidPaystackUrl(redirectUrl)) {
-        console.error('[paymentApi] Invalid Paystack redirect URL:', redirectUrl);
+        logger.error('[paymentApi] Invalid Paystack redirect URL:', redirectUrl);
         throw new Error('Invalid payment redirect URL. Please contact support.');
       }
 
-      console.log('[paymentApi] ✅ Valid Paystack URL extracted:', redirectUrl);
+      logger.debug('[paymentApi] ✅ Valid Paystack URL extracted');
       return response.data;
     } catch (error) {
-      console.error('[paymentApi] Payment initialization error:', {
+      logger.error('[paymentApi] Payment initialization error:', {
         message: error.message,
         response: error.response?.data,
         status: error.response?.status,
@@ -95,7 +85,7 @@ const paymentApi = {
   
   verifyPaystackPayment: async (reference, orderId) => {
     try {
-      console.log('[paymentApi] 🔍 Verifying Paystack payment:', { reference, orderId });
+      logger.debug('[paymentApi] Verifying Paystack payment:', { reference, orderId });
       const response = await api.get('/payment/paystack/verify', {
         params: {
           reference,
@@ -103,10 +93,10 @@ const paymentApi = {
         },
       });
 
-      console.log('[paymentApi] ✅ Payment verification successful');
+      logger.debug('[paymentApi] ✅ Payment verification successful');
       return response.data;
     } catch (error) {
-      console.error('[paymentApi] Payment verification error:', {
+      logger.error('[paymentApi] Payment verification error:', {
         message: error.message,
         response: error.response?.data,
         status: error.response?.status,
@@ -116,8 +106,4 @@ const paymentApi = {
   },
 };
 
-console.log('[paymentApi] Module loaded. verifyPaystackPayment type:', typeof paymentApi.verifyPaystackPayment);
-console.log('[paymentApi] Available methods:', Object.keys(paymentApi));
-
 export default paymentApi;
-export { paymentApi };

@@ -133,7 +133,7 @@ const GlobalHeader = ({ style }) => {
       await saveSearchToHistory(searchTerm.trim());
       await loadSearchHistory();
 
-      navigation.navigate('SearchTab', {
+      navigation.navigate('HomeTab', {
         screen: 'Search',
         params: { query: searchTerm.trim() },
       });
@@ -179,7 +179,7 @@ const GlobalHeader = ({ style }) => {
           const productId = suggestion.data?._id || suggestion.data?.id || suggestion._id || suggestion.id;
           if (productId) {
             // Navigate to product detail using nested navigation
-            navigation.navigate('SearchTab', {
+            navigation.navigate('HomeTab', {
               screen: 'ProductDetail',
               params: {
                 productId: productId,
@@ -193,7 +193,7 @@ const GlobalHeader = ({ style }) => {
         }
 
         // Navigate to search results for other types
-        navigation.navigate('SearchTab', {
+        navigation.navigate('HomeTab', {
           screen: 'Search',
           params: { 
             query: searchQuery,

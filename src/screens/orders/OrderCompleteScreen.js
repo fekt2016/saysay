@@ -2,7 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQueryClient, useQuery, useMutation } from '@tanstack/react-query';
 import { theme } from '../../theme';
 import { useOrderConfirmation } from '../../hooks/useOrderConfirmation';
 import { useCartActions } from '../../hooks/useCart';
@@ -43,6 +43,12 @@ const OrderCompleteScreen = () => {
   const finalTotalAmount = order?.totalPrice || order?.totalAmount || totalAmount;
   const finalPaymentMethod = order?.paymentMethod || paymentMethod;
   const finalDeliveryMethod = order?.deliveryMethod || deliveryMethod;
+  
+  // Check if order is confirmed (paymentStatus === 'paid' or orderStatus === 'confirmed')
+  const isOrderConfirmed = order?.paymentStatus === 'paid' || 
+                          order?.paymentStatus === 'completed' ||
+                          order?.orderStatus === 'confirmed' ||
+                          order?.currentStatus === 'confirmed';
 
   const isPaystackPayment = finalPaymentMethod === 'mobile_money' || finalPaymentMethod === 'paystack';
   const isCashOnDelivery = finalPaymentMethod === 'payment_on_delivery' || finalPaymentMethod === 'cod';
@@ -58,19 +64,74 @@ const OrderCompleteScreen = () => {
       return;
     }
 
+    // Clear cart if order is confirmed (for any payment method)
+    if (isOrderConfirmed) {
+      cartClearedRef.current = true;
+      clearCart();
+      queryClient.invalidateQueries({ queryKey: ['cart'] });
+      // Invalidate product queries to refresh stock
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+      queryClient.invalidateQueries({ queryKey: ['product'] });
+      queryClient.invalidateQueries({ queryKey: ['wishlist'] });
+      // Invalidate all product-related queries (including category-products, seller products, etc.)
+      queryClient.invalidateQueries({ 
+        predicate: (query) => {
+          const key = query.queryKey;
+          return (
+            (Array.isArray(key) && key[0] === 'products') ||
+            (Array.isArray(key) && key[0] === 'product') ||
+            (Array.isArray(key) && key[0] === 'category-products')
+          );
+        },
+      });
+      return;
+    }
+
+    // For COD/Wallet: Clear immediately (no verification needed)
     if (isCashOnDelivery || isWalletPayment) {
       cartClearedRef.current = true;
       clearCart();
       queryClient.invalidateQueries({ queryKey: ['cart'] });
+      // Invalidate product queries to refresh stock
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+      queryClient.invalidateQueries({ queryKey: ['product'] });
+      queryClient.invalidateQueries({ queryKey: ['wishlist'] });
+      // Invalidate all product-related queries (including category-products, seller products, etc.)
+      queryClient.invalidateQueries({ 
+        predicate: (query) => {
+          const key = query.queryKey;
+          return (
+            (Array.isArray(key) && key[0] === 'products') ||
+            (Array.isArray(key) && key[0] === 'product') ||
+            (Array.isArray(key) && key[0] === 'category-products')
+          );
+        },
+      });
       return;
     }
 
+    // For Paystack: Clear after payment verification succeeds
     if (isPaystackPayment && verificationStatus === 'success' && hasVerified) {
       cartClearedRef.current = true;
       clearCart();
       queryClient.invalidateQueries({ queryKey: ['cart'] });
+      // Invalidate product queries to refresh stock
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+      queryClient.invalidateQueries({ queryKey: ['product'] });
+      queryClient.invalidateQueries({ queryKey: ['wishlist'] });
+      // Invalidate all product-related queries (including category-products, seller products, etc.)
+      queryClient.invalidateQueries({ 
+        predicate: (query) => {
+          const key = query.queryKey;
+          return (
+            (Array.isArray(key) && key[0] === 'products') ||
+            (Array.isArray(key) && key[0] === 'product') ||
+            (Array.isArray(key) && key[0] === 'category-products')
+          );
+        },
+      });
     }
-  }, [orderId, isCashOnDelivery, isWalletPayment, isPaystackPayment, verificationStatus, hasVerified, clearCart, queryClient]);
+  }, [orderId, isOrderConfirmed, isCashOnDelivery, isWalletPayment, isPaystackPayment, verificationStatus, hasVerified, clearCart, queryClient, order]);
 
   const handleViewOrder = () => {
     if (orderId) {

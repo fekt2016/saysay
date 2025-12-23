@@ -2,8 +2,54 @@ import api from './api';
 
 export const orderService = {
   createOrder: async (data) => {
+    try {
+      console.log('[orderApi] Creating order with data:', {
+        orderItemsCount: data?.orderItems?.length || 0,
+        paymentMethod: data?.paymentMethod,
+        deliveryMethod: data?.deliveryMethod,
+        hasAddress: !!data?.address,
+        hasCoupon: !!data?.couponCode,
+      });
+      
     const response = await api.post("/order", data);
+      
+      console.log('[orderApi] ✅ Order created successfully:', {
+        orderId: response?.data?.data?.order?._id || response?.data?.order?._id,
+        orderNumber: response?.data?.data?.order?.orderNumber || response?.data?.order?.orderNumber,
+      });
+      
     return response;
+    } catch (error) {
+      console.error('[orderApi] ❌ Order creation error:', {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        request: error.request ? 'Request made but no response' : 'No request made',
+        isAxiosError: error.isAxiosError,
+        code: error.code,
+        config: {
+          url: error.config?.url,
+          method: error.config?.method,
+          baseURL: error.config?.baseURL,
+        },
+      });
+      
+      // Re-throw with enhanced error message
+      const errorMessage = 
+        error.response?.data?.message ||
+        error.response?.data?.error ||
+        error.message ||
+        'Failed to create order';
+      
+      const enhancedError = new Error(errorMessage);
+      enhancedError.response = error.response;
+      enhancedError.status = error.response?.status;
+      enhancedError.isAxiosError = error.isAxiosError;
+      enhancedError.originalError = error;
+      
+      throw enhancedError;
+    }
   },
 
   getAllOrders: async () => {

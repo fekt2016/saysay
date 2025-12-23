@@ -303,9 +303,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   logoImage: {
-    width: 120,
-    height: 120,
-    marginBottom: theme.spacing.md,
+    width: 100,
+    height: 100,
+    // marginBottom: theme.spacing.md,
   },
   formContainer: {
     flex: 1,

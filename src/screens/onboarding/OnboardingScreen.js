@@ -55,38 +55,32 @@ const OnboardingScreen = () => {
 
   const isLastSlide = currentIndex === ONBOARDING_SLIDES.length - 1;
 
-  const handleComplete = async () => {
-    try {
-      await setOnboardingCompleted();
-      logger.debug('[Onboarding] Onboarding completed');
-      // AppNavigator will automatically switch to main navigator
-      // Navigation to Auth will be handled by AppNavigator
-    } catch (error) {
+  const handleComplete = () => {
+    // Android: Execute immediately, don't wait for async to complete
+    // This ensures touch feedback is immediate
+    setOnboardingCompleted().catch((error) => {
       logger.error('[Onboarding] Error completing onboarding:', error);
-      // Still mark as completed to allow app to proceed
-      try {
-        await setOnboardingCompleted();
-      } catch (retryError) {
+      // Retry once
+      setOnboardingCompleted().catch((retryError) => {
         logger.error('[Onboarding] Error retrying completion:', retryError);
-      }
-    }
+      });
+    });
+    // AppNavigator will automatically switch to main navigator
+    // Navigation to Auth will be handled by AppNavigator
   };
 
-  const handleSkip = async () => {
-    try {
-      await setOnboardingCompleted();
-      logger.debug('[Onboarding] Onboarding skipped');
-      // AppNavigator will automatically switch to main navigator
-      // Navigation to Auth will be handled by AppNavigator
-    } catch (error) {
+  const handleSkip = () => {
+    // Android: Execute immediately, don't wait for async to complete
+    // This ensures touch feedback is immediate
+    setOnboardingCompleted().catch((error) => {
       logger.error('[Onboarding] Error skipping onboarding:', error);
-      // Still mark as completed to allow app to proceed
-      try {
-        await setOnboardingCompleted();
-      } catch (retryError) {
+      // Retry once
+      setOnboardingCompleted().catch((retryError) => {
         logger.error('[Onboarding] Error retrying skip:', retryError);
-      }
-    }
+      });
+    });
+    // AppNavigator will automatically switch to main navigator
+    // Navigation to Auth will be handled by AppNavigator
   };const handleNext = () => {
     if (isLastSlide) {
       handleComplete();
@@ -136,11 +130,12 @@ const OnboardingScreen = () => {
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
 
-      <View style={styles.skipContainer}>
+      <View style={styles.skipContainer} pointerEvents="box-none">
         <TouchableOpacity
           onPress={handleSkip}
           style={styles.skipButton}
           activeOpacity={0.7}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} // Android: Increase touch target
         >
           <Text style={styles.skipText}>Skip</Text>
         </TouchableOpacity>
@@ -172,15 +167,19 @@ const OnboardingScreen = () => {
             flatListRef.current?.scrollToIndex({ index: info.index, animated: false });
           });
         }}
+        // Android: Prevent FlatList from blocking touches on buttons
+        nestedScrollEnabled={true}
+        scrollEnabled={true}
       />
 
       {renderDots()}
 
-      <View style={styles.buttonContainer}>
+      <View style={styles.buttonContainer} pointerEvents="box-none">
         <TouchableOpacity
           onPress={handleNext}
           style={styles.nextButton}
           activeOpacity={0.8}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} // Android: Increase touch target
         >
           <Text style={styles.nextButtonText}>
             {isLastSlide ? 'Get Started' : 'Next'}
@@ -207,6 +206,7 @@ const styles = StyleSheet.create({
     top: 16,
     right: 16,
     zIndex: 10,
+    elevation: 10, // Android: Required for proper z-ordering and touch handling
     paddingTop: theme.spacing.md || 16,
   },
   skipButton: {
@@ -243,6 +243,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing.xl || 32,
     paddingBottom: theme.spacing.xl || 32,
     paddingTop: theme.spacing.md || 16,
+    zIndex: 10, // Ensure button container is above FlatList
+    elevation: 10, // Android: Required for proper z-ordering and touch handling
+    backgroundColor: theme.colors.background || '#FFFFFF', // Ensure solid background
   },
   nextButton: {
     backgroundColor: theme.colors.primary,
@@ -259,7 +262,7 @@ const styles = StyleSheet.create({
     },
     shadowOpacity: 0.1,
     shadowRadius: 4,
-    elevation: 3,
+    elevation: 5, // Android: Increased elevation to ensure button is above FlatList
   },
   nextButtonText: {
     color: '#FFFFFF',

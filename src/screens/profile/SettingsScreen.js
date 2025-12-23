@@ -30,9 +30,12 @@ import { theme } from '../../theme';const SettingsScreen = () => {
   const [localPhoto, setLocalPhoto] = useState(null);
 
   const { data: creditBalanceData } = useCreditBalance();
-  const walletBalance = creditBalanceData?.data?.wallet?.balance 
-                        creditBalanceData?.data?.creditbalance?.balance 
-                        creditBalanceData?.data?.balance 
+  // Use availableBalance first (what user can actually spend), then fallback to balance
+  const walletBalance = creditBalanceData?.data?.wallet?.availableBalance ?? 
+                        creditBalanceData?.data?.wallet?.balance ?? 
+                        creditBalanceData?.data?.creditbalance?.availableBalance ??
+                        creditBalanceData?.data?.creditbalance?.balance ?? 
+                        creditBalanceData?.data?.balance ?? 
                         0;
 
   useLayoutEffect(() => {
@@ -46,10 +49,10 @@ import { theme } from '../../theme';const SettingsScreen = () => {
     });
   }, [navigation]);
 
-  const photoUrl = localPhoto 
-                   user?.photo 
-                   user?.profilePicture 
-                   user?.avatar 
+  const photoUrl = localPhoto || 
+                   user?.photo || 
+                   user?.profilePicture || 
+                   user?.avatar || 
                    user?.image;
 
   const handleAvatarPress = async () => {
@@ -121,11 +124,16 @@ import { theme } from '../../theme';const SettingsScreen = () => {
     navigation.navigate('EditProfile');
   };
 
+  // Ensure walletBalance is a valid number before using toFixed
+  const displayBalance = typeof walletBalance === 'number' && !isNaN(walletBalance)
+    ? walletBalance.toFixed(2)
+    : '0.00';
+
   const accountItems = [
     {
       icon: 'wallet-outline',
       label: 'Wallet Balance',
-      description: `Balance: GH₵${walletBalance.toFixed(2)}`,
+      description: `Balance: GH₵${displayBalance}`,
       screen: 'CreditBalance',
       color: theme.colors.green || theme.colors.primary,
     },

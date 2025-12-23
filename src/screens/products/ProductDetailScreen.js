@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, useEffect, useLayoutEffect } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useLayoutEffect, useRef } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -12,10 +12,11 @@ import {
   View,
   StyleSheet,
   Platform,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
 import useProduct from '../../hooks/useProduct';
 import { useCartActions, useCartTotals } from '../../hooks/useCart';
 import { useToggleWishlist } from '../../hooks/useWishlist';
@@ -25,6 +26,8 @@ import { theme } from '../../theme';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const IMAGE_HEIGHT = SCREEN_WIDTH; 
+const TAB_BAR_HEIGHT = 50;
+const TABS = ['Overview', 'Description', 'Specifications', 'Reviews', 'Shipping & Returns']; 
 
 const isColorValue = (value) => {
   if (!value || typeof value !== 'string') return false;
@@ -35,6 +38,25 @@ const isColorValue = (value) => {
   ];
   const hexRegex = /^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/;
   return colorNames.includes(value.toLowerCase()) || hexRegex.test(value);
+};
+
+// TabButton Component
+const TabButton = ({ label, isActive, onPress }) => {
+  return (
+    <TouchableOpacity
+      style={[styles.tabButton, isActive && styles.tabButtonActive]}
+      onPress={onPress}
+      activeOpacity={0.7}
+    >
+      <Text 
+        style={[styles.tabButtonText, isActive && styles.tabButtonTextActive]}
+        numberOfLines={1}
+        adjustsFontSizeToFit
+      >
+        {label}
+      </Text>
+    </TouchableOpacity>
+  );
 };
 
 const ProductDetailScreen = () => {
@@ -48,7 +70,13 @@ const ProductDetailScreen = () => {
   const [quantity, setQuantity] = useState(1);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedVariant, setSelectedVariant] = useState(null);
+  const [selectedSku, setSelectedSku] = useState(null); // CRITICAL: Maintain selectedSku state separately
   const [selectedAttributes, setSelectedAttributes] = useState({});
+  const [productAddedToCart, setProductAddedToCart] = useState(false);
+  const [activeTab, setActiveTab] = useState('Overview');
+  const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
+  const [fullScreenImageVisible, setFullScreenImageVisible] = useState(false);
+  const scrollViewRef = useRef(null);
 
   const { useGetProductById } = useProduct();
   const { data: productData, isLoading, error, refetch } = useGetProductById(productIdToUse);
@@ -85,19 +113,46 @@ const ProductDetailScreen = () => {
     return Array.from(keys);
   }, [variants]);
 
+  // CRITICAL: Auto-select default SKU on product load (SKU is the unit of commerce)
   useEffect(() => {
-    if (variants.length > 0 && Object.keys(selectedAttributes).length === 0) {
-      const initialAttributes = {};
-      const inStockVariant = variants.find((v) => v.stock > 0) || variants[0];
-      if (inStockVariant && inStockVariant.attributes) {
-        inStockVariant.attributes.forEach((attr) => {
-          initialAttributes[attr.key] = attr.value;
-        });
-        setSelectedAttributes(initialAttributes);
-        setSelectedVariant(inStockVariant);
+    if (variants.length > 0 && product && !selectedVariant) {
+      // Find active variant first, otherwise use first in-stock variant, then first variant
+      const defaultVariant = 
+        variants.find(v => v.status === "active" && v.sku) ||
+        variants.find(v => v.stock > 0 && v.sku) ||
+        variants.find(v => v.sku) ||
+        variants[0];
+      
+      if (defaultVariant?.sku) {
+        console.log('[ProductDetailScreen] Auto-selecting default SKU:', defaultVariant.sku);
+        setSelectedVariant(defaultVariant);
+        setSelectedSku(defaultVariant.sku.trim().toUpperCase()); // CRITICAL: Set SKU
+        if (defaultVariant.attributes && Array.isArray(defaultVariant.attributes)) {
+          const initialAttributes = {};
+          defaultVariant.attributes.forEach((attr) => {
+            initialAttributes[attr.key] = attr.value;
+          });
+          setSelectedAttributes(initialAttributes);
+        }
+      }
+    } else if (variants.length === 0) {
+      // Product has no variants - clear selection
+      if (selectedVariant) {
+        setSelectedVariant(null);
+        setSelectedSku(null);
+        setSelectedAttributes({});
       }
     }
-  }, [variants, selectedAttributes]);
+  }, [variants, product, selectedVariant]);
+  
+  // CRITICAL: Sync selectedSku when selectedVariant changes
+  useEffect(() => {
+    if (selectedVariant?.sku) {
+      setSelectedSku(selectedVariant.sku.trim().toUpperCase());
+    } else if (!selectedVariant) {
+      setSelectedSku(null);
+    }
+  }, [selectedVariant]);
 
   useEffect(() => {
     if (Object.keys(selectedAttributes).length > 0 && variants.length > 0) {
@@ -107,7 +162,16 @@ const ProductDetailScreen = () => {
           return variant.attributes.some((attr) => attr.key === key && attr.value === value);
         });
       });
-      setSelectedVariant(matchingVariant || null);
+      if (matchingVariant) {
+        setSelectedVariant(matchingVariant);
+        // CRITICAL: Set SKU when variant is matched
+        if (matchingVariant.sku) {
+          setSelectedSku(matchingVariant.sku.trim().toUpperCase());
+        }
+      } else {
+        setSelectedVariant(null);
+        setSelectedSku(null);
+      }
     }
   }, [selectedAttributes, variants]);
 
@@ -186,8 +250,24 @@ const ProductDetailScreen = () => {
   useLayoutEffect(() => {
     navigation.setOptions({
       title: product?.name || 'Product Details',
+      headerRight: () => (
+        <TouchableOpacity
+          style={styles.headerCartButton}
+          onPress={() => navigation.navigate('CartTab', { screen: 'Cart' })}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="cart-outline" size={24} color={theme.colors.text} />
+          {cartItemCount > 0 && (
+            <View style={styles.headerCartBadge}>
+              <Text style={styles.headerCartBadgeText}>
+                {cartItemCount > 99 ? '99+' : cartItemCount}
+              </Text>
+            </View>
+          )}
+        </TouchableOpacity>
+      ),
     });
-  }, [navigation, product?.name]);
+  }, [navigation, product?.name, cartItemCount]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -205,6 +285,27 @@ const ProductDetailScreen = () => {
       ...prev,
       [attribute]: value,
     }));
+    setProductAddedToCart(false);
+  }, []);
+
+  const incrementQuantity = useCallback(() => {
+    setQuantity((prev) => {
+      const newQuantity = Math.min(prev + 1, stock);
+      if (newQuantity !== prev) {
+        setProductAddedToCart(false);
+      }
+      return newQuantity;
+    });
+  }, [stock]);
+
+  const decrementQuantity = useCallback(() => {
+    setQuantity((prev) => {
+      const newQuantity = Math.max(1, prev - 1);
+      if (newQuantity !== prev) {
+        setProductAddedToCart(false);
+      }
+      return newQuantity;
+    });
   }, []);
 
   const handleAddToCart = useCallback(() => {
@@ -213,15 +314,218 @@ const ProductDetailScreen = () => {
       return;
     }
 
+    // CRITICAL: HARD LOG before addToCart to debug SKU issues
+    console.log("[ADD_TO_CART_CLICK]", {
+      productId: product._id,
+      productName: product.name,
+      selectedSku,
+      selectedVariant: selectedVariant ? {
+        _id: selectedVariant._id,
+        sku: selectedVariant.sku,
+        status: selectedVariant.status,
+      } : null,
+      variants: product?.variants?.map(v => ({
+        id: v._id,
+        sku: v.sku,
+        status: v.status,
+      })) || [],
+      quantity,
+      hasVariants: variants.length > 0,
+    });
+
+    // CRITICAL: For multi-variant products, ensure SKU is selected
+    // If no SKU selected, try to auto-select default variant
+    let finalSku = selectedSku;
+    let finalVariant = selectedVariant;
+
+    if (variants.length > 1) {
+      if (!selectedSku) {
+        // Try to auto-select default variant
+        const defaultVariant = 
+          variants.find(v => v.status === "active" && v.sku) ||
+          variants.find(v => (v.stock || 0) > 0 && v.sku) ||
+          variants.find(v => v.sku) ||
+          variants[0];
+        
+        if (defaultVariant?.sku) {
+          const defaultSku = defaultVariant.sku.trim().toUpperCase();
+          console.log('[ProductDetailScreen] Auto-selecting default variant SKU:', defaultSku);
+          
+          // Update state for future operations
+          setSelectedVariant(defaultVariant);
+          setSelectedSku(defaultSku);
+          
+          // Set attributes for default variant
+          if (defaultVariant.attributes && Array.isArray(defaultVariant.attributes)) {
+            const initialAttributes = {};
+            defaultVariant.attributes.forEach((attr) => {
+              initialAttributes[attr.key] = attr.value;
+            });
+            setSelectedAttributes(initialAttributes);
+          }
+          
+          finalSku = defaultSku;
+          finalVariant = defaultVariant;
+        } else {
+          // Cannot resolve default SKU - block add
+          Alert.alert(
+            'Variant Required',
+            'Please select a variant before adding to cart.',
+            [{ text: 'OK' }]
+          );
+          return;
+        }
+      }
+    } else if (variants.length === 1) {
+      // Single-variant: Auto-select if not already selected
+      const singleVariant = variants[0];
+      if (!selectedVariant && singleVariant?.sku) {
+        const singleSku = singleVariant.sku.trim().toUpperCase();
+        setSelectedVariant(singleVariant);
+        setSelectedSku(singleSku);
+        if (singleVariant.attributes && Array.isArray(singleVariant.attributes)) {
+          const initialAttributes = {};
+          singleVariant.attributes.forEach((attr) => {
+            initialAttributes[attr.key] = attr.value;
+          });
+          setSelectedAttributes(initialAttributes);
+        }
+        finalSku = singleSku;
+        finalVariant = singleVariant;
+      } else {
+        finalSku = selectedSku || (singleVariant?.sku ? singleVariant.sku.trim().toUpperCase() : null);
+        finalVariant = selectedVariant || singleVariant;
+      }
+    }
+
+    // CRITICAL: Final validation - SKU must exist for variant products
+    if (variants.length > 0 && !finalSku) {
+      console.error('[ProductDetailScreen] ❌ SKU missing for variant product:', {
+        productId: product._id,
+        productName: product.name,
+        selectedVariant: finalVariant,
+        selectedSku: finalSku,
+        variants: product?.variants,
+      });
+      Alert.alert('Error', 'Variant SKU is required. Please select a variant.');
+      return;
+    }
+
+    console.log('[ProductDetailScreen] Adding to cart (SKU-based contract):', {
+      productId: product._id,
+      productName: product.name,
+      variantSku: finalSku,
+      selectedSku: finalSku,
+      hasVariants: variants.length > 0,
+      isSingleVariant: variants.length === 1,
+    });
+
+    // CRITICAL: Pass variantSku directly - variants are identified ONLY by SKU
     addToCart(
       {
         product: product,
         quantity,
-        variant: selectedVariant,
+        variantSku: finalSku || undefined, // SKU string - ONLY variantSku is accepted
       },
       {
         onSuccess: () => {
+          setProductAddedToCart(true);
           Alert.alert('Success', 'Product added to cart!');
+        },
+        onError: (error) => {
+          console.error('Error adding to cart:', error);
+          
+          // Handle SKU_REQUIRED error specifically
+          if (error?.code === 'SKU_REQUIRED' || error?.message?.includes('variant')) {
+            Alert.alert(
+              'Variant Required',
+              'Please select a variant before adding to cart.',
+              [{ text: 'OK' }]
+            );
+          } else {
+            Alert.alert('Error', error?.message || 'Failed to add product to cart. Please try again.');
+          }
+        },
+      }
+    );
+  }, [product, quantity, isInStock, selectedVariant, selectedSku, variants, addToCart]);
+
+  const handleGoToCart = useCallback(() => {
+    navigation.navigate('CartTab', { screen: 'Cart' });
+  }, [navigation]);
+
+  const handleBuyNow = useCallback(() => {
+    if (!isInStock || !product) {
+      Alert.alert('Out of Stock', 'This product is currently out of stock.');
+      return;
+    }
+
+    // CRITICAL: Auto-handle single-variant products
+    const resolvedVariant = variants.length === 1
+      ? variants[0]
+      : selectedVariant;
+
+    // Validate variant selection for products with variants
+    if (variants.length > 0 && (!resolvedVariant || !resolvedVariant._id)) {
+      Alert.alert(
+        'Variant Required',
+        'Please select a variant before proceeding.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
+    // Extract variant ID - MUST be string or null (NEVER pass full object)
+    let variantId = null;
+    if (resolvedVariant?._id) {
+      variantId = resolvedVariant._id.toString ? resolvedVariant._id.toString() : String(resolvedVariant._id);
+      
+      // Validate ObjectId format
+      if (!/^[0-9a-fA-F]{24}$/.test(variantId)) {
+        console.error('[ProductDetailScreen] ❌ Invalid variant ID format:', variantId);
+        Alert.alert('Error', 'Invalid variant selected. Please try again.');
+        return;
+      }
+    }
+
+    // Update UI state if auto-selected
+    if (variants.length === 1 && !selectedVariant) {
+      setSelectedVariant(resolvedVariant);
+      if (resolvedVariant.sku) {
+        setSelectedSku(resolvedVariant.sku.trim().toUpperCase());
+      }
+      if (resolvedVariant.attributes && Array.isArray(resolvedVariant.attributes)) {
+        const initialAttributes = {};
+        resolvedVariant.attributes.forEach((attr) => {
+          initialAttributes[attr.key] = attr.value;
+        });
+        setSelectedAttributes(initialAttributes);
+      }
+    }
+
+    // CRITICAL: Use selectedSku directly - no extraction needed
+    const variantSkuForGoToCart = selectedSku || (resolvedVariant?.sku ? resolvedVariant.sku.trim().toUpperCase() : null);
+    
+    if (!variantSkuForGoToCart && variants.length > 0) {
+      console.error('[ProductDetailScreen] ❌ SKU missing for buy now:', {
+        productId: product._id,
+        selectedSku,
+        resolvedVariant,
+      });
+      Alert.alert('Error', 'Variant SKU is required. Please select a variant.');
+      return;
+    }
+
+    // CRITICAL: Pass variantSku directly - variants are identified ONLY by SKU
+    addToCart(
+      {
+        product: product,
+        quantity,
+        variantSku: variantSkuForGoToCart, // SKU string - ONLY variantSku is accepted
+      },
+      {
+        onSuccess: () => {
+          navigation.navigate('CartTab', { screen: 'Cart' });
         },
         onError: (error) => {
           console.error('Error adding to cart:', error);
@@ -229,15 +533,218 @@ const ProductDetailScreen = () => {
         },
       }
     );
-  }, [product, quantity, isInStock, selectedVariant, addToCart]);
+  }, [product, quantity, isInStock, selectedVariant, variants, addToCart, navigation]);
 
-  const incrementQuantity = useCallback(() => {
-    setQuantity((prev) => Math.min(prev + 1, stock));
-  }, [stock]);
 
-  const decrementQuantity = useCallback(() => {
-    setQuantity((prev) => Math.max(1, prev - 1));
-  }, []);
+  const renderTabContent = useCallback(() => {
+    switch (activeTab) {
+      case 'Overview':
+        return (
+          <View style={styles.tabContent}>
+            {product.summary && (
+              <View style={styles.overviewItem}>
+                <Text style={styles.overviewTitle}>Summary</Text>
+                <Text style={styles.overviewText}>{product.summary}</Text>
+              </View>
+            )}
+            <View style={styles.overviewItem}>
+              <Text style={styles.overviewTitle}>Key Features</Text>
+              {product.keyFeatures && Array.isArray(product.keyFeatures) ? (
+                product.keyFeatures.map((feature, index) => (
+                  <View key={index} style={styles.featureItem}>
+                    <Ionicons name="checkmark-circle" size={20} color={theme.colors.success} />
+                    <Text style={styles.featureText}>{feature}</Text>
+                  </View>
+                ))
+              ) : (
+                <View style={styles.featureItem}>
+                  <Ionicons name="checkmark-circle" size={20} color={theme.colors.success} />
+                  <Text style={styles.featureText}>Premium Quality</Text>
+                </View>
+              )}
+            </View>
+            {product.warranty && (
+              <View style={styles.overviewItem}>
+                <Text style={styles.overviewTitle}>Warranty</Text>
+                <Text style={styles.overviewText}>{product.warranty}</Text>
+              </View>
+            )}
+          </View>
+        );
+      case 'Description':
+        const description = product.description || 'No description available.';
+        const shouldTruncate = description.length > 200;
+        const displayText = isDescriptionExpanded || !shouldTruncate 
+          ? description 
+          : description.substring(0, 200) + '...';
+        
+        return (
+          <View style={styles.tabContent}>
+            <Text style={styles.descriptionText}>{displayText}</Text>
+            {shouldTruncate && (
+              <TouchableOpacity
+                onPress={() => setIsDescriptionExpanded(!isDescriptionExpanded)}
+                style={styles.expandButton}
+              >
+                <Text style={styles.expandButtonText}>
+                  {isDescriptionExpanded ? 'Show Less' : 'Show More'}
+                </Text>
+                <Ionicons
+                  name={isDescriptionExpanded ? 'chevron-up' : 'chevron-down'}
+                  size={16}
+                  color={theme.colors.primary}
+                />
+              </TouchableOpacity>
+            )}
+          </View>
+        );
+      case 'Specifications':
+        const specs = product.specifications || product.specs || {};
+        const specEntries = Object.entries(specs);
+        
+        return (
+          <View style={styles.tabContent}>
+            {specEntries.length > 0 ? (
+              <View style={styles.specsContainer}>
+                {specEntries.map(([key, value], index) => (
+                  <View key={index} style={styles.specRow}>
+                    <Text style={styles.specKey}>{key}</Text>
+                    <Text style={styles.specValue}>{String(value)}</Text>
+                  </View>
+                ))}
+              </View>
+            ) : (
+              <View style={styles.emptyState}>
+                <Ionicons name="information-circle-outline" size={48} color={theme.colors.grey400} />
+                <Text style={styles.emptyStateText}>No specifications available</Text>
+              </View>
+            )}
+          </View>
+        );
+      case 'Reviews':
+        return (
+          <View style={styles.tabContent}>
+            {reviewCount > 0 ? (
+              <>
+                <View style={styles.reviewsSummary}>
+                  <View style={styles.overallRating}>
+                    <Text style={styles.ratingNumber}>{averageRating.toFixed(1)}</Text>
+                    <Text style={styles.ratingStars}>⭐</Text>
+                    <Text style={styles.ratingTextSmall}>out of 5</Text>
+                  </View>
+                  <View style={styles.ratingBars}>
+                    {[5, 4, 3, 2, 1].map((stars) => {
+                      const count = reviews.filter((r) => r.rating === stars).length;
+                      const percentage = reviewCount > 0 ? (count / reviewCount) * 100 : 0;
+                      return (
+                        <View key={stars} style={styles.ratingBar}>
+                          <Text style={styles.starCount}>{stars} stars</Text>
+                          <View style={styles.barTrack}>
+                            <View style={[styles.barProgress, { width: `${percentage}%` }]} />
+                          </View>
+                          <Text style={styles.barPercentage}>{percentage.toFixed(0)}%</Text>
+                        </View>
+                      );
+                    })}
+                  </View>
+                </View>
+                {isAuthenticated && (
+                  <TouchableOpacity
+                    style={styles.writeReviewButton}
+                    onPress={() => navigation.navigate('WriteReview', { productId: productIdToUse })}
+                  >
+                    <Ionicons name="create-outline" size={20} color={theme.colors.white} />
+                    <Text style={styles.writeReviewText}>Write a Review</Text>
+                  </TouchableOpacity>
+                )}
+                <FlatList
+                  data={reviews}
+                  keyExtractor={(item) => item._id || item.id || Math.random().toString()}
+                  scrollEnabled={false}
+                  renderItem={({ item }) => (
+                    <View style={styles.reviewCard}>
+                      <View style={styles.reviewHeader}>
+                        <View style={styles.reviewerAvatar}>
+                          <Text style={styles.reviewerInitial}>
+                            {(item.user?.name || 'A').charAt(0).toUpperCase()}
+                          </Text>
+                        </View>
+                        <View style={styles.reviewerInfo}>
+                          <Text style={styles.reviewerName}>{item.user?.name || 'Anonymous'}</Text>
+                          <Text style={styles.reviewDate}>
+                            {new Date(item.createdAt || item.date).toLocaleDateString('en-US', {
+                              year: 'numeric',
+                              month: 'long',
+                              day: 'numeric',
+                            })}
+                          </Text>
+                        </View>
+                        <Text style={styles.reviewRating}>
+                          {'⭐'.repeat(item.rating || 0)}
+                        </Text>
+                      </View>
+                      {item.title && <Text style={styles.reviewTitle}>{item.title}</Text>}
+                      <Text style={styles.reviewComment}>
+                        {item.comment || item.review || 'No comment'}
+                      </Text>
+                    </View>
+                  )}
+                />
+              </>
+            ) : (
+              <View style={styles.noReviewsState}>
+                <Text style={styles.noReviewsIcon}>💬</Text>
+                <Text style={styles.noReviewsText}>No reviews yet</Text>
+                <Text style={styles.noReviewsText}>Be the first to share your thoughts!</Text>
+                {isAuthenticated && (
+                  <TouchableOpacity
+                    style={styles.writeReviewButton}
+                    onPress={() => navigation.navigate('WriteReview', { productId: productIdToUse })}
+                  >
+                    <Ionicons name="create-outline" size={20} color={theme.colors.white} />
+                    <Text style={styles.writeReviewText}>Write a Review</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            )}
+          </View>
+        );
+      case 'Shipping & Returns':
+        return (
+          <View style={styles.tabContent}>
+            <View style={styles.shippingItem}>
+              <Ionicons name="time-outline" size={24} color={theme.colors.primary} />
+              <View style={styles.shippingContent}>
+                <Text style={styles.shippingTitle}>Delivery Timeline</Text>
+                <Text style={styles.shippingText}>
+                  {product.shippingTime || '3-7 business days'}
+                </Text>
+              </View>
+            </View>
+            <View style={styles.shippingItem}>
+              <Ionicons name="location-outline" size={24} color={theme.colors.primary} />
+              <View style={styles.shippingContent}>
+                <Text style={styles.shippingTitle}>Shipping Locations</Text>
+                <Text style={styles.shippingText}>
+                  {product.shippingLocations || 'Nationwide delivery available'}
+                </Text>
+              </View>
+            </View>
+            <View style={styles.shippingItem}>
+              <Ionicons name="refresh-outline" size={24} color={theme.colors.primary} />
+              <View style={styles.shippingContent}>
+                <Text style={styles.shippingTitle}>Return Policy</Text>
+                <Text style={styles.shippingText}>
+                  {product.returnPolicy || '30-day return policy. Items must be unused and in original packaging.'}
+                </Text>
+              </View>
+            </View>
+          </View>
+        );
+      default:
+        return null;
+    }
+  }, [activeTab, product, isDescriptionExpanded, reviews, reviewCount, averageRating, isAuthenticated, productIdToUse, navigation]);
 
   if (isLoading && !refreshing) {
     return (
@@ -267,18 +774,47 @@ const ProductDetailScreen = () => {
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <ScrollView
+        ref={scrollViewRef}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.primary} />
         }
       >
-
+        {/* Image Carousel Section */}
         <View style={styles.imageSection}>
+          {images.length > 0 ? (
+            <FlatList
+              data={images}
+              horizontal
+              pagingEnabled
+              showsHorizontalScrollIndicator={false}
+              keyExtractor={(item, index) => index.toString()}
+              onMomentumScrollEnd={(event) => {
+                const index = Math.round(event.nativeEvent.contentOffset.x / SCREEN_WIDTH);
+                setSelectedImageIndex(Math.max(0, Math.min(index, images.length - 1)));
+              }}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  activeOpacity={0.9}
+                  onPress={() => setFullScreenImageVisible(true)}
+                  style={styles.imageCarouselItem}
+                >
           <Image
-            source={{ uri: images[selectedImageIndex] || images[0] || '' }}
+                    source={{ uri: item }}
             style={styles.mainImage}
             resizeMode="cover"
           />
+                </TouchableOpacity>
+              )}
+              getItemLayout={(data, index) => ({
+                length: SCREEN_WIDTH,
+                offset: SCREEN_WIDTH * index,
+                index,
+              })}
+            />
+          ) : (
+            <View style={styles.mainImage} />
+          )}
           {hasDiscount && (
             <View style={[styles.imageBadge, styles.discountBadge]}>
               <Text style={styles.badgeText}>-{discountPercentage}% OFF</Text>
@@ -289,8 +825,22 @@ const ProductDetailScreen = () => {
               <Text style={styles.badgeText}>Out of Stock</Text>
             </View>
           )}
+          {images.length > 1 && (
+            <View style={styles.paginationDots}>
+              {images.map((_, index) => (
+                <View
+                  key={index}
+                  style={[
+                    styles.paginationDot,
+                    index === selectedImageIndex && styles.paginationDotActive,
+                  ]}
+                />
+              ))}
+            </View>
+          )}
         </View>
 
+        {/* Thumbnail Gallery */}
         {images.length > 1 && (
           <FlatList
             data={images}
@@ -312,6 +862,7 @@ const ProductDetailScreen = () => {
           />
         )}
 
+        {/* Product Core Info Section */}
         <View style={styles.contentSection}>
           {product.parentCategory && (
             <View style={styles.categoryBadge}>
@@ -330,20 +881,39 @@ const ProductDetailScreen = () => {
             )}
           </View>
 
+          <View style={styles.ratingStockRow}>
           {(product.ratingsAverage || product.rating) && (
             <View style={styles.ratingContainer}>
+                <Ionicons name="star" size={16} color={theme.colors.warning} />
               <Text style={styles.ratingText}>
-                ⭐ {(product.ratingsAverage || product.rating || 0).toFixed(1)}
-                {product.ratingsQuantity && ` (${product.ratingsQuantity} reviews)`}
+                  {(product.ratingsAverage || product.rating || 0).toFixed(1)}
               </Text>
+                {product.ratingsQuantity > 0 && (
+                  <Text style={styles.ratingCount}>({product.ratingsQuantity})</Text>
+                )}
             </View>
           )}
-
           <View style={[styles.stockBadge, isInStock ? styles.stockBadgeInStock : styles.stockBadgeOutOfStock]}>
             <Text style={styles.stockText}>
               {isInStock ? `${stock} in stock` : 'Out of stock'}
             </Text>
+            </View>
           </View>
+
+          {/* Seller Info */}
+          {product.seller && (
+            <TouchableOpacity
+              style={styles.sellerContainer}
+              onPress={() => navigation.navigate('Seller', { sellerId: product.seller._id || product.seller.id })}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="storefront-outline" size={20} color={theme.colors.primary} />
+              <Text style={styles.sellerText}>
+                Sold by {product.seller.shopName || product.seller.name || 'Seller'}
+              </Text>
+              <Ionicons name="chevron-forward" size={16} color={theme.colors.textSecondary} />
+            </TouchableOpacity>
+          )}
 
           {product.sku && (
             <View style={styles.skuContainer}>
@@ -352,6 +922,7 @@ const ProductDetailScreen = () => {
           )}
         </View>
 
+        {/* Variant Selector */}
         {attributeKeys.length > 0 && (
           <View style={styles.variantsSection}>
             <Text style={styles.sectionTitle}>Select Options</Text>
@@ -466,118 +1037,131 @@ const ProductDetailScreen = () => {
           </View>
         )}
 
-        {product.description && (
-          <View style={styles.descriptionSection}>
-            <Text style={styles.sectionTitle}>Description</Text>
-            <Text style={styles.descriptionText}>{product.description}</Text>
+        {/* Tab Bar */}
+        {TABS && TABS.length > 0 && (
+          <View style={styles.tabBarContainer}>
+            <View style={styles.tabBar}>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.tabBarContent}
+                style={styles.tabBarScrollView}
+                nestedScrollEnabled={true}
+              >
+                {TABS.map((tab) => (
+                  <TabButton
+                    key={tab}
+                    label={tab}
+                    isActive={activeTab === tab}
+                    onPress={() => setActiveTab(tab)}
+                  />
+                ))}
+              </ScrollView>
+            </View>
           </View>
         )}
 
-        <View style={styles.reviewsSection}>
-          <Text style={styles.sectionTitle}>Customer Reviews ({reviewCount})</Text>
-          {reviewCount > 0 ? (
-            <>
-              <View style={styles.reviewsSummary}>
-                <View style={styles.overallRating}>
-                  <Text style={styles.ratingNumber}>{averageRating.toFixed(1)}</Text>
-                  <Text style={styles.ratingStars}>⭐</Text>
-                  <Text style={styles.ratingTextSmall}>out of 5</Text>
-                </View>
-                <View style={styles.ratingBars}>
-                  {[5, 4, 3, 2, 1].map((stars) => {
-                    const count = reviews.filter((r) => r.rating === stars).length;
-                    const percentage = reviewCount > 0 ? (count / reviewCount) * 100 : 0;
-                    return (
-                      <View key={stars} style={styles.ratingBar}>
-                        <Text style={styles.starCount}>{stars} stars</Text>
-                        <View style={styles.barTrack}>
-                          <View style={[styles.barProgress, { width: `${percentage}%` }]} />
-                        </View>
-                        <Text style={styles.barPercentage}>{percentage.toFixed(0)}%</Text>
-                      </View>
-                    );
-                  })}
-                </View>
-              </View>
-
-              <FlatList
-                data={reviews.slice(0, 5)}
-                keyExtractor={(item) => item._id || item.id || Math.random().toString()}
-                scrollEnabled={false}
-                renderItem={({ item }) => (
-                  <View style={styles.reviewCard}>
-                    <View style={styles.reviewHeader}>
-                      <View style={styles.reviewerAvatar}>
-                        <Text style={styles.reviewerInitial}>
-                          {(item.user?.name || 'A').charAt(0).toUpperCase()}
-                        </Text>
-                      </View>
-                      <View style={styles.reviewerInfo}>
-                        <Text style={styles.reviewerName}>{item.user?.name || 'Anonymous'}</Text>
-                        <Text style={styles.reviewDate}>
-                          {new Date(item.createdAt || item.date).toLocaleDateString('en-US', {
-                            year: 'numeric',
-                            month: 'long',
-                            day: 'numeric',
-                          })}
-                        </Text>
-                      </View>
-                      <Text style={styles.reviewRating}>
-                        {'⭐'.repeat(item.rating || 0)}
-                      </Text>
-                    </View>
-                    {item.title && <Text style={styles.reviewTitle}>{item.title}</Text>}
-                    <Text style={styles.reviewComment}>
-                      {item.comment || item.review || 'No comment'}
-                    </Text>
-                  </View>
-                )}
-              />
-            </>
-          ) : (
-            <View style={styles.noReviewsState}>
-              <Text style={styles.noReviewsIcon}>💬</Text>
-              <Text style={styles.noReviewsText}>No reviews yet</Text>
-              <Text style={styles.noReviewsText}>Be the first to share your thoughts!</Text>
-            </View>
-          )}
-        </View>
+        {/* Tab Content */}
+        {renderTabContent()}
       </ScrollView>
 
-      <View style={styles.actionBar}>
-        <View style={styles.quantityContainer}>
-          <TouchableOpacity
-            style={[styles.quantityButton, quantity <= 1 && styles.quantityButtonDisabled]}
-            onPress={decrementQuantity}
-            disabled={quantity <= 1}
-          >
-            <Text style={styles.quantityText}>−</Text>
-          </TouchableOpacity>
-          <Text style={styles.quantityValue}>{quantity}</Text>
-          <TouchableOpacity
-            style={[
-              styles.quantityButton,
-              (quantity >= stock || !isInStock) && styles.quantityButtonDisabled,
-            ]}
-            onPress={incrementQuantity}
-            disabled={quantity >= stock || !isInStock}
-          >
-            <Text style={styles.quantityText}>+</Text>
-          </TouchableOpacity>
-        </View>
+      {/* Full Screen Image Modal */}
+      <Modal
+        visible={fullScreenImageVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setFullScreenImageVisible(false)}
+      >
         <TouchableOpacity
-          style={[styles.addToCartButton, !isInStock && styles.addToCartButtonDisabled]}
-          onPress={handleAddToCart}
-          disabled={!isInStock || isAddingToCart}
+          style={styles.fullScreenImageContainer}
+          activeOpacity={1}
+          onPress={() => setFullScreenImageVisible(false)}
         >
-          {isAddingToCart ? (
-            <ActivityIndicator size="small" color={theme.colors.white} />
-          ) : (
-            <Text style={styles.addToCartText}>
-            {isInStock ? 'Add to Cart' : 'Out of Stock'}
-            </Text>
-          )}
+          <Image
+            source={{ uri: images[selectedImageIndex] || images[0] || '' }}
+            style={styles.fullScreenImage}
+            resizeMode="contain"
+          />
+          <TouchableOpacity
+            style={styles.closeButton}
+            onPress={() => setFullScreenImageVisible(false)}
+          >
+            <Ionicons name="close" size={28} color={theme.colors.white} />
+          </TouchableOpacity>
         </TouchableOpacity>
+      </Modal>
+
+      {/* Bottom Action Bar */}
+      <View style={styles.actionBar}>
+        {productAddedToCart ? (
+          <TouchableOpacity
+            style={styles.goToCartButton}
+            onPress={handleGoToCart}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="cart" size={20} color={theme.colors.white} />
+            <Text style={styles.goToCartText}>Go to Cart</Text>
+          </TouchableOpacity>
+        ) : (
+          <>
+            <TouchableOpacity
+              style={[styles.wishlistButton, isInWishlist && styles.wishlistButtonActive]}
+              onPress={toggleWishlist}
+              disabled={isAddingToWishlist}
+              activeOpacity={0.7}
+            >
+              {isAddingToWishlist ? (
+                <ActivityIndicator size="small" color={theme.colors.primary} />
+              ) : (
+                <Ionicons
+                  name={isInWishlist ? 'heart' : 'heart-outline'}
+                  size={24}
+                  color={isInWishlist ? theme.colors.error : theme.colors.text}
+                />
+              )}
+            </TouchableOpacity>
+            <View style={styles.quantityContainer}>
+              <TouchableOpacity
+                style={[styles.quantityButton, quantity <= 1 && styles.quantityButtonDisabled]}
+                onPress={decrementQuantity}
+                disabled={quantity <= 1}
+              >
+                <Text style={styles.quantityText}>−</Text>
+              </TouchableOpacity>
+              <Text style={styles.quantityValue}>{quantity}</Text>
+              <TouchableOpacity
+                style={[
+                  styles.quantityButton,
+                  (quantity >= stock || !isInStock) && styles.quantityButtonDisabled,
+                ]}
+                onPress={incrementQuantity}
+                disabled={quantity >= stock || !isInStock}
+              >
+                <Text style={styles.quantityText}>+</Text>
+              </TouchableOpacity>
+            </View>
+            <TouchableOpacity
+              style={[styles.addToCartButton, !isInStock && styles.addToCartButtonDisabled]}
+              onPress={handleAddToCart}
+              disabled={!isInStock || isAddingToCart}
+            >
+              {isAddingToCart ? (
+                <ActivityIndicator size="small" color={theme.colors.white} />
+              ) : (
+                <Text style={styles.addToCartText}>
+                {isInStock ? 'Add to Cart' : 'Out of Stock'}
+                </Text>
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.buyNowButton, !isInStock && styles.buyNowButtonDisabled]}
+              onPress={handleBuyNow}
+              disabled={!isInStock || isAddingToCart}
+            >
+              <Text style={styles.buyNowText}>Buy Now</Text>
+            </TouchableOpacity>
+          </>
+        )}
       </View>
     </SafeAreaView>
 );
@@ -594,9 +1178,13 @@ const styles = StyleSheet.create({
     position: 'relative',
     backgroundColor: theme.colors.grey100,
   },
+  imageCarouselItem: {
+    width: SCREEN_WIDTH,
+    height: IMAGE_HEIGHT,
+  },
   mainImage: {
-    width: '100%',
-    height: '100%',
+    width: SCREEN_WIDTH,
+    height: IMAGE_HEIGHT,
   },
   imageBadge: {
     position: 'absolute',
@@ -1000,10 +1588,22 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     padding: theme.spacing.md,
+    paddingBottom: theme.spacing.md + 35, // Add extra padding to account for bottom tab bar
     borderTopWidth: 1,
     borderTopColor: theme.colors.grey200,
     backgroundColor: theme.colors.white,
-    gap: theme.spacing.md,
+    gap: theme.spacing.sm,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: -2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 8,
+      },
+    }),
   },
   quantityContainer: {
     flexDirection: 'row',
@@ -1012,10 +1612,11 @@ const styles = StyleSheet.create({
     borderColor: theme.colors.grey300,
     borderRadius: theme.borderRadius.md,
     overflow: 'hidden',
+    height: 48,
   },
   quantityButton: {
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 48,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: theme.colors.grey100,
@@ -1037,7 +1638,7 @@ const styles = StyleSheet.create({
   },
   addToCartButton: {
     flex: 1,
-    height: 40,
+    height: 48,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: theme.colors.primary,
@@ -1047,6 +1648,24 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.grey400,
   },
   addToCartText: {
+    fontSize: theme.typography.fontSize.base,
+    fontWeight: theme.typography.fontWeight.semiBold,
+    color: theme.colors.white,
+  },
+  goToCartButton: {
+    flex: 1,
+    height: 48,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: theme.colors.primary,
+    borderRadius: theme.borderRadius.md,
+    gap: theme.spacing.sm,
+  },
+  goToCartIcon: {
+    marginRight: 4,
+  },
+  goToCartText: {
     fontSize: theme.typography.fontSize.base,
     fontWeight: theme.typography.fontWeight.semiBold,
     color: theme.colors.white,
@@ -1076,6 +1695,302 @@ const styles = StyleSheet.create({
     borderRadius: theme.borderRadius.md,
   },
   retryText: {
+    fontSize: theme.typography.fontSize.base,
+    fontWeight: theme.typography.fontWeight.semiBold,
+    color: theme.colors.white,
+  },
+  headerCartButton: {
+    position: 'relative',
+    marginRight: theme.spacing.md,
+    padding: theme.spacing.xs,
+  },
+  headerCartBadge: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    minWidth: 20,
+    height: 20,
+    paddingHorizontal: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: theme.colors.error,
+    borderRadius: theme.borderRadius.round || 10,
+    borderWidth: 2,
+    borderColor: theme.colors.white,
+  },
+  headerCartBadgeText: {
+    color: theme.colors.white,
+    fontSize: theme.typography.fontSize.xxs || 10,
+    fontWeight: theme.typography.fontWeight.bold,
+  },
+  // Image Carousel Styles
+  paginationDots: {
+    position: 'absolute',
+    bottom: theme.spacing.md,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: theme.spacing.xs,
+  },
+  paginationDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.5)',
+  },
+  paginationDotActive: {
+    backgroundColor: theme.colors.white,
+    width: 24,
+  },
+  // Full Screen Image Modal
+  fullScreenImageContainer: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.95)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  fullScreenImage: {
+    width: SCREEN_WIDTH,
+    height: '100%',
+  },
+  closeButton: {
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 50 : 30,
+    right: theme.spacing.md,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  // Product Core Info Updates
+  ratingStockRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.md,
+    marginBottom: theme.spacing.sm,
+  },
+  ratingCount: {
+    fontSize: theme.typography.fontSize.sm,
+    color: theme.colors.textSecondary,
+    marginLeft: 4,
+  },
+  sellerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: theme.spacing.sm,
+    backgroundColor: theme.colors.grey50,
+    borderRadius: theme.borderRadius.md,
+    marginTop: theme.spacing.sm,
+    gap: theme.spacing.sm,
+  },
+  sellerText: {
+    flex: 1,
+    fontSize: theme.typography.fontSize.sm,
+    color: theme.colors.text,
+    fontWeight: theme.typography.fontWeight.medium,
+  },
+  // Tab Bar Styles
+  tabBarContainer: {
+    marginTop: 0,
+    backgroundColor: theme.colors.white,
+    width: '100%',
+  },
+  tabBar: {
+    backgroundColor: theme.colors.white,
+    borderBottomWidth: 2,
+    borderBottomColor: theme.colors.grey200,
+    height: TAB_BAR_HEIGHT + theme.spacing.sm * 2,
+    width: '100%',
+  },
+  tabBarScrollView: {
+    height: TAB_BAR_HEIGHT + theme.spacing.sm * 2,
+    width: '100%',
+  },
+  tabBarContent: {
+    paddingHorizontal: theme.spacing.sm,
+    paddingVertical: theme.spacing.xs,
+    alignItems: 'center',
+    height: TAB_BAR_HEIGHT + theme.spacing.sm * 2,
+    flexDirection: 'row',
+  },
+  tabButton: {
+    paddingHorizontal: theme.spacing.sm,
+    paddingVertical: theme.spacing.xs,
+    marginRight: theme.spacing.xs,
+    borderRadius: theme.borderRadius.md || 10,
+    backgroundColor: theme.colors.grey100,
+    borderBottomWidth: 3,
+    borderBottomColor: 'transparent',
+    minHeight: TAB_BAR_HEIGHT - 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+    minWidth: 70,
+    flexShrink: 0,
+  },
+  tabButtonActive: {
+    backgroundColor: theme.colors.primary100 || theme.colors.primary + '20',
+    borderBottomColor: theme.colors.primary,
+  },
+  tabButtonText: {
+    fontSize: theme.typography.fontSize.xs || 12,
+    fontWeight: theme.typography.fontWeight.medium,
+    color: theme.colors.textSecondary,
+    textAlign: 'center',
+  },
+  tabButtonTextActive: {
+    color: theme.colors.primary,
+    fontWeight: theme.typography.fontWeight.semibold || theme.typography.fontWeight.bold,
+  },
+  tabIndicator: {
+    // Removed - using borderBottomColor instead
+  },
+  // Tab Content Styles
+  tabContent: {
+    padding: theme.spacing.md,
+    minHeight: 200,
+  },
+  // Overview Tab Styles
+  overviewItem: {
+    marginBottom: theme.spacing.lg,
+  },
+  overviewTitle: {
+    fontSize: theme.typography.fontSize.lg,
+    fontWeight: theme.typography.fontWeight.bold,
+    color: theme.colors.text,
+    marginBottom: theme.spacing.sm,
+  },
+  overviewText: {
+    fontSize: theme.typography.fontSize.base,
+    color: theme.colors.textSecondary,
+    lineHeight: theme.typography.fontSize.base * 1.5,
+  },
+  featureItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: theme.spacing.sm,
+    gap: theme.spacing.sm,
+  },
+  featureText: {
+    flex: 1,
+    fontSize: theme.typography.fontSize.base,
+    color: theme.colors.text,
+  },
+  // Description Tab Styles
+  expandButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+    gap: theme.spacing.xs,
+  },
+  expandButtonText: {
+    fontSize: theme.typography.fontSize.sm,
+    color: theme.colors.primary,
+    fontWeight: theme.typography.fontWeight.semiBold,
+  },
+  // Specifications Tab Styles
+  specsContainer: {
+    backgroundColor: theme.colors.grey50,
+    borderRadius: theme.borderRadius.md,
+    overflow: 'hidden',
+  },
+  specRow: {
+    flexDirection: 'row',
+    padding: theme.spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.grey200,
+  },
+  specKey: {
+    flex: 1,
+    fontSize: theme.typography.fontSize.sm,
+    fontWeight: theme.typography.fontWeight.semiBold,
+    color: theme.colors.text,
+  },
+  specValue: {
+    flex: 1,
+    fontSize: theme.typography.fontSize.sm,
+    color: theme.colors.textSecondary,
+    textAlign: 'right',
+  },
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: theme.spacing['2xl'],
+  },
+  emptyStateText: {
+    fontSize: theme.typography.fontSize.base,
+    color: theme.colors.textSecondary,
+    marginTop: theme.spacing.md,
+  },
+  // Reviews Tab Styles
+  writeReviewButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: theme.colors.primary,
+    padding: theme.spacing.md,
+    borderRadius: theme.borderRadius.md,
+    marginBottom: theme.spacing.lg,
+    gap: theme.spacing.sm,
+  },
+  writeReviewText: {
+    fontSize: theme.typography.fontSize.base,
+    fontWeight: theme.typography.fontWeight.semiBold,
+    color: theme.colors.white,
+  },
+  // Shipping & Returns Tab Styles
+  shippingItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: theme.spacing.lg,
+    gap: theme.spacing.md,
+  },
+  shippingContent: {
+    flex: 1,
+  },
+  shippingTitle: {
+    fontSize: theme.typography.fontSize.base,
+    fontWeight: theme.typography.fontWeight.semiBold,
+    color: theme.colors.text,
+    marginBottom: theme.spacing.xs,
+  },
+  shippingText: {
+    fontSize: theme.typography.fontSize.sm,
+    color: theme.colors.textSecondary,
+    lineHeight: theme.typography.fontSize.sm * 1.5,
+  },
+  // Action Bar Updates
+  wishlistButton: {
+    width: 48,
+    height: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: theme.borderRadius.md,
+    borderWidth: 1,
+    borderColor: theme.colors.grey300,
+    backgroundColor: theme.colors.white,
+  },
+  wishlistButtonActive: {
+    borderColor: theme.colors.error,
+    backgroundColor: theme.colors.error + '10',
+  },
+  buyNowButton: {
+    flex: 1,
+    height: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: theme.colors.secondary,
+    borderRadius: theme.borderRadius.md,
+  },
+  buyNowButtonDisabled: {
+    backgroundColor: theme.colors.grey400,
+  },
+  buyNowText: {
     fontSize: theme.typography.fontSize.base,
     fontWeight: theme.typography.fontWeight.semiBold,
     color: theme.colors.white,

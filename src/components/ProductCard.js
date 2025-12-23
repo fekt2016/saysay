@@ -79,6 +79,21 @@ const ProductCard = ({
   const hasSold =
     typeof product?.totalSold === 'number' && product.totalSold > 0;
 
+  // Calculate stock: sum of all variant stocks, or 0 if no variants
+  const calculateStock = () => {
+    if (product?.variants && Array.isArray(product.variants) && product.variants.length > 0) {
+      return product.variants.reduce((sum, variant) => sum + (variant.stock || 0), 0);
+    }
+    // Fallback: if product has a direct stock field (for simple products)
+    if (typeof product?.stock === 'number') {
+      return product.stock;
+    }
+    return 0;
+  };
+
+  const stock = calculateStock();
+  const isInStock = stock > 0;
+
   return (
     <View style={[styles.shadowContainer, style]}>
       <TouchableOpacity
@@ -160,6 +175,13 @@ const ProductCard = ({
               )}
             </View>
           )}
+
+          {/* Stock Display */}
+          <View style={styles.stockContainer}>
+            <Text style={[styles.stockText, isInStock ? styles.stockInStock : styles.stockOutOfStock]}>
+              {isInStock ? `${stock} left` : 'Out of stock'}
+            </Text>
+          </View>
         </View>
       </TouchableOpacity>
     </View>
@@ -271,6 +293,19 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.fontSize.xs,
     color: theme.colors.grey500,
     marginLeft: theme.spacing.xs,
+  },
+  stockContainer: {
+    marginTop: theme.spacing.xs,
+  },
+  stockText: {
+    fontSize: theme.typography.fontSize.xs,
+    fontWeight: theme.typography.fontWeight.medium,
+  },
+  stockInStock: {
+    color: theme.colors.success || '#10B981',
+  },
+  stockOutOfStock: {
+    color: theme.colors.error || '#EF4444',
   },
 });
 

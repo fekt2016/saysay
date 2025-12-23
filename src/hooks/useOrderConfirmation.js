@@ -1,3 +1,9 @@
+import React, { useState, useRef, useEffect } from 'react';
+import { useQueryClient, useQuery, useMutation } from '@tanstack/react-query';
+import { useGetUserOrderById } from './useOrder';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import paymentApi from '../services/paymentApi';
+
 export const useOrderConfirmation = (
   orderFromState,
   orderIdFromUrl,
@@ -24,7 +30,9 @@ export const useOrderConfirmation = (
     data: orderFromApi,
     isLoading: isOrderLoading,
     error: orderError,
-  } = useGetUserOrderById(!orderFromState && orderIdFromUrl ? orderIdFromUrl : null);useEffect(() => {
+  } = useGetUserOrderById(!orderFromState && orderIdFromUrl ? orderIdFromUrl : null);
+
+  useEffect(() => {
 
     const orderIdChanged = lastOrderIdRef.current !== orderIdFromUrl;
     const paymentRefChanged = lastPaymentRefRef.current !== paymentReference;
@@ -120,7 +128,7 @@ export const useOrderConfirmation = (
             queriesInvalidatedRef.current = true;
 
             setTimeout(() => {
-
+              // Invalidate order-related queries
               queryClient.invalidateQueries({ 
                 queryKey: ['order', orderIdFromUrl],
                 exact: true,
@@ -134,12 +142,38 @@ export const useOrderConfirmation = (
               queryClient.invalidateQueries({ 
                 queryKey: ['cart'],
               });
+
+              // CRITICAL: Invalidate product queries to refresh stock after order
+              // Invalidate all product-related queries (plural and singular, with and without IDs)
+              queryClient.invalidateQueries({ 
+                queryKey: ['products'],
+              });
+
+              queryClient.invalidateQueries({ 
+                queryKey: ['product'],
+              });
+
+              // Also invalidate category-products and other product query variations
+              queryClient.invalidateQueries({ 
+                predicate: (query) => {
+                  const key = query.queryKey;
+                  return (
+                    (Array.isArray(key) && key[0] === 'products') ||
+                    (Array.isArray(key) && key[0] === 'product') ||
+                    (Array.isArray(key) && key[0] === 'category-products')
+                  );
+                },
+              });
+
+              queryClient.invalidateQueries({ 
+                queryKey: ['wishlist'],
+              });
             }, 1500); 
           }
         } catch (error) {
           const message =
-            error?.response?.data?.message 
-            error?.message 
+            error?.response?.data?.message ||
+            error?.message ||
             'Failed to verify payment';
           setPaymentVerificationError(message);
           setVerificationStatus('failed');

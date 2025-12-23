@@ -3,7 +3,7 @@ import { View, ActivityIndicator, StyleSheet, Alert, Text, TouchableOpacity } fr
 import { WebView } from 'react-native-webview';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQueryClient, useQuery, useMutation } from '@tanstack/react-query';
 import { theme } from '../../theme';
 import logger from '../../utils/logger';const WalletTopupWebViewScreen = () => {
   const navigation = useNavigation();
@@ -67,13 +67,34 @@ import logger from '../../utils/logger';const WalletTopupWebViewScreen = () => {
     hasRedirectedRef.current = true;
     logger.debug('[WalletTopupWebView] ✅ Payment callback detected, closing WebView');
 
-    navigation.replace('TopupSuccess', {
-      amount: amount || null,
-      reference: reference || null,
-    });
-
+    // Invalidate queries first
     queryClient.invalidateQueries({ queryKey: ['wallet-balance'] });
     queryClient.invalidateQueries({ queryKey: ['wallet-transactions'] });
+
+    // Close the modal first, then navigate to TopupSuccess
+    // This ensures navigation works correctly from modal context
+    // Use getParent() to access the parent navigator (AccountStack)
+    const parentNavigator = navigation.getParent();
+    if (parentNavigator) {
+      // Close modal
+      navigation.goBack();
+      // Navigate from parent navigator
+      setTimeout(() => {
+        parentNavigator.navigate('TopupSuccess', {
+          amount: amount || null,
+          reference: reference || null,
+        });
+      }, 100);
+    } else {
+      // Fallback: try direct navigation (should work if modal is in same stack)
+      navigation.goBack();
+      setTimeout(() => {
+        navigation.navigate('TopupSuccess', {
+          amount: amount || null,
+          reference: reference || null,
+        });
+      }, 100);
+    }
   };
 
   const handleNavigationStateChange = (navState) => {

@@ -164,7 +164,7 @@ const HeaderSearchInput = () => {
       await saveSearchToHistory(searchTerm.trim());
       await loadSearchHistory();
 
-      navigation.navigate('SearchTab', {
+      navigation.navigate('HomeTab', {
         screen: 'Search',
         params: { query: searchTerm.trim() },
       });
@@ -209,7 +209,7 @@ const HeaderSearchInput = () => {
           const productId = suggestion.data?._id || suggestion.data?.id || suggestion._id || suggestion.id;
           if (productId) {
             // Navigate to product detail
-            navigation.navigate('SearchTab', {
+            navigation.navigate('HomeTab', {
               screen: 'ProductDetail',
               params: {
                 productId: productId,
@@ -223,7 +223,7 @@ const HeaderSearchInput = () => {
         }
 
         // Navigate to search results for other types
-        navigation.navigate('SearchTab', {
+        navigation.navigate('HomeTab', {
           screen: 'Search',
           params: { 
             query: searchQuery,

@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 import followApi from '../services/followApi';
-import { useAuth } from '../../hooks/useAuth';
+import { useAuth } from './useAuth';
 import { useMemo } from 'react';
 
 export const useToggleFollow = (sellerId) => {

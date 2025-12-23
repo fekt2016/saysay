@@ -7,6 +7,7 @@ import PaystackWebViewScreen from '../screens/checkout/PaystackWebViewScreen';
 import OrderCompleteScreen from '../screens/orders/OrderCompleteScreen';
 import { defaultHeaderOptions } from './headerConfig';
 import { useAuth } from '../hooks/useAuth';
+import { hideTabBarOptions, hideTabBarModalOptions } from './tabVisibility';
 
 const Stack = createNativeStackNavigator();
 
@@ -43,15 +44,17 @@ const CartStack = () => {
         options={{ 
           presentation: 'card',
           title: 'Checkout',
+          ...hideTabBarOptions,
         }}
       />
       <Stack.Screen
         name="PaystackWebView"
         component={PaystackWebViewScreen}
         options={{ 
-          presentation: 'card', 
+          presentation: 'modal', 
           gestureEnabled: false,
           title: 'Payment',
+          ...hideTabBarModalOptions,
         }}
       />
       <Stack.Screen
@@ -61,6 +64,7 @@ const CartStack = () => {
           presentation: 'card', 
           gestureEnabled: false,
           title: 'Order Confirmation',
+          ...hideTabBarOptions,
         }}
       />
     </Stack.Navigator>

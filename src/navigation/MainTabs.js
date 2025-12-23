@@ -4,7 +4,6 @@ import { getFocusedRouteNameFromRoute } from '@react-navigation/native';
 import { View, Text, StyleSheet, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import HomeStack from './HomeStack';
-import SearchStack from './SearchStack';
 import CategoryStack from './CategoryStack';
 import CartStack from './CartStack';
 import WishlistStack from './WishlistStack';
@@ -14,7 +13,7 @@ import { useCartTotals } from '../hooks/useCart';
 
 const Tab = createBottomTabNavigator();
 
-const HIDE_TAB_BAR_ROUTES = ['ProductDetail', 'CategoryProducts', 'Account', 'PaymentMethod', 'Wishlist', 'Support', 'HelpCenter', 'HelpCenterTabs', 'Orders', 'OrderDetail', 'OrderComplete', 'Settings', 'EditProfile', 'CreditBalance', 'AddMoney', 'SecuritySettings', 'ChangePassword', 'ResetPIN', 'NotificationSettings', 'Permission', 'DeviceManagement', 'Language', 'Region', 'AppVersion'];
+const HIDE_TAB_BAR_ROUTES = ['CategoryProducts', 'Account', 'PaymentMethod', 'Wishlist', 'Support', 'HelpCenter', 'HelpCenterTabs', 'Orders', 'OrderDetail', 'OrderComplete', 'Settings', 'EditProfile', 'CreditBalance', 'AddMoney', 'SecuritySettings', 'ChangePassword', 'ResetPIN', 'NotificationSettings', 'Permission', 'DeviceManagement', 'Language', 'Region', 'AppVersion'];
 
 const getTabBarVisibility = (route) => {
   const routeName = getFocusedRouteNameFromRoute(route) ?? route?.name ?? 'Home';
@@ -57,6 +56,22 @@ const MainTabs = () => {
     borderTopColor: 'transparent',
   };
 
+  const hiddenTabBarStyle = {
+    height: 0,
+    overflow: 'hidden',
+    margin: 0,
+    padding: 0,
+    borderTopWidth: 0,
+    elevation: 0,
+    shadowOpacity: 0,
+    backgroundColor: 'transparent',
+    opacity: 0,
+    position: 'absolute',
+    bottom: -1000, // Move it completely off-screen
+    width: 0,
+    left: -1000, // Also move horizontally off-screen
+  };
+
   return (
     <Tab.Navigator
       screenOptions={{
@@ -64,6 +79,7 @@ const MainTabs = () => {
         tabBarActiveTintColor: theme.colors.black950 || '#000000',
         tabBarInactiveTintColor: theme.colors.grey300,
         tabBarStyle: tabBarStyle,
+        tabBarBackground: () => <View style={{ backgroundColor: 'transparent' }} />, // Transparent background
         tabBarLabelStyle: {
           fontSize: theme.typography.fontSize.xs,
           fontWeight: theme.typography.fontWeight.medium,
@@ -84,21 +100,13 @@ const MainTabs = () => {
               />
             </View>
           ),
-          tabBarStyle: getTabBarVisibility(route) ? tabBarStyle : { height: 0, overflow: 'hidden' },
+          tabBarStyle: getTabBarVisibility(route) ? tabBarStyle : hiddenTabBarStyle,
         })}
-      />
-      <Tab.Screen
-        name="SearchTab"
-        component={SearchStack}
-        options={{
-          title: 'Search',
-          tabBarButton: () => null,
-        }}
       />
       <Tab.Screen
         name="CategoryTab"
         component={CategoryStack}
-        options={{
+        options={({ route }) => ({
           title: 'Category',
           tabBarIcon: ({ color, size, focused }) => (
             <View style={styles.iconShadow}>
@@ -109,7 +117,8 @@ const MainTabs = () => {
               />
             </View>
           ),
-        }}
+          tabBarStyle: getTabBarVisibility(route) ? tabBarStyle : hiddenTabBarStyle,
+        })}
       />
       <Tab.Screen
         name="CartTab"
@@ -134,7 +143,7 @@ const MainTabs = () => {
               )}
             </View>
           ),
-          tabBarStyle: getTabBarVisibility(route) ? tabBarStyle : { height: 0, overflow: 'hidden' },
+          tabBarStyle: getTabBarVisibility(route) ? tabBarStyle : hiddenTabBarStyle,
         })}
       />
       <Tab.Screen
@@ -151,7 +160,7 @@ const MainTabs = () => {
               />
             </View>
           ),
-          tabBarStyle: getTabBarVisibility(route) ? tabBarStyle : { height: 0, overflow: 'hidden' },
+          tabBarStyle: getTabBarVisibility(route) ? tabBarStyle : hiddenTabBarStyle,
         })}
       />
       <Tab.Screen
@@ -168,7 +177,7 @@ const MainTabs = () => {
               />
             </View>
           ),
-          tabBarStyle: getTabBarVisibility(route) ? tabBarStyle : { height: 0, overflow: 'hidden' },
+          tabBarStyle: getTabBarVisibility(route) ? tabBarStyle : hiddenTabBarStyle,
         })}
       />
     </Tab.Navigator>

@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState, useCallback, useLayoutEffect } from 'react';
 import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, ScrollView, Text, TextInput, TouchableOpacity, View, StyleSheet } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQueryClient, useQuery, useMutation } from '@tanstack/react-query';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as SecureStore from 'expo-secure-store';
 import { theme } from '../../theme';
@@ -41,6 +41,69 @@ import CouponField from '../../components/checkout/CouponField';
 import AddressCard from '../../components/checkout/AddressCard';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+
+/**
+ * Resolve SKU from cart item
+ * CRITICAL: Variants are identified by SKU - never by object, never by ID
+ * 
+ * @param {Object} cartItem - Cart item with product and variant information
+ * @returns {string|null} - SKU string or null if not found
+ */
+const resolveSkuFromCartItem = (cartItem) => {
+  // Case 1: variantSku field (preferred - new contract)
+  if (cartItem.variantSku) {
+    return cartItem.variantSku.trim().toUpperCase();
+  }
+
+  // Case 2: variant object with SKU (backward compatibility)
+  if (cartItem.variant?.sku) {
+    return cartItem.variant.sku.trim().toUpperCase();
+  }
+
+  // Case 3: variant ID → resolve from product variants (backward compatibility)
+  if (cartItem.variant && Array.isArray(cartItem.product?.variants)) {
+    const variantId = typeof cartItem.variant === 'string' 
+      ? cartItem.variant 
+      : (cartItem.variant._id || cartItem.variant.id);
+    
+    if (variantId) {
+      const found = cartItem.product.variants.find(
+        (v) => {
+          const vId = v._id?.toString ? v._id.toString() : String(v._id);
+          const searchId = variantId.toString ? variantId.toString() : String(variantId);
+          return vId === searchId;
+        }
+      );
+      if (found?.sku) {
+        return found.sku.trim().toUpperCase();
+      }
+    }
+  }
+
+  // Case 4: variantId field (string ID) - backward compatibility
+  if (cartItem.variantId && Array.isArray(cartItem.product?.variants)) {
+    const found = cartItem.product.variants.find(
+      (v) => {
+        const vId = v._id?.toString ? v._id.toString() : String(v._id);
+        const searchId = cartItem.variantId.toString ? cartItem.variantId.toString() : String(cartItem.variantId);
+        return vId === searchId;
+      }
+    );
+    if (found?.sku) {
+      return found.sku.trim().toUpperCase();
+    }
+  }
+
+  // Case 5: single-variant product auto-assignment
+  if (Array.isArray(cartItem.product?.variants) && cartItem.product.variants.length === 1) {
+    const sku = cartItem.product.variants[0].sku;
+    if (sku) {
+      return sku.trim().toUpperCase();
+    }
+  }
+
+  return null;
+};
 
 const normalizeApiResponse = (response) => {
   if (!response) return null;
@@ -165,7 +228,28 @@ const CheckoutScreen = () => {
   const scrollViewRef = React.useRef(null);
 
   const creditBalance = useMemo(() => {
-    return creditBalanceData?.data?.wallet?.balance || creditBalanceData?.data?.creditbalance?.balance || 0;
+    // Use availableBalance first (what user can actually spend), then fallback to balance
+    const availableBalance = creditBalanceData?.data?.wallet?.availableBalance ?? 
+                             creditBalanceData?.data?.wallet?.balance ?? 
+                             creditBalanceData?.data?.creditbalance?.availableBalance ??
+                             creditBalanceData?.data?.creditbalance?.balance ?? 
+                             0;
+    
+    // DEBUG: Log wallet balance details for troubleshooting
+    if (__DEV__ && creditBalanceData) {
+      console.log('[CheckoutScreen] 💰 Wallet balance details:', {
+        availableBalance: creditBalanceData?.data?.wallet?.availableBalance,
+        balance: creditBalanceData?.data?.wallet?.balance,
+        holdAmount: creditBalanceData?.data?.wallet?.holdAmount,
+        calculatedAvailableBalance: creditBalanceData?.data?.wallet?.balance 
+          ? Math.max(0, (creditBalanceData.data.wallet.balance || 0) - (creditBalanceData.data.wallet.holdAmount || 0))
+          : 0,
+        finalCreditBalance: availableBalance,
+        rawData: creditBalanceData,
+      });
+    }
+    
+    return availableBalance;
   }, [creditBalanceData]);
 
   const [newAddress, setNewAddress] = useState({
@@ -200,13 +284,67 @@ const CheckoutScreen = () => {
     return items || [];
   }, [cartData]);
 
+  // CRITICAL: Normalize cart items - extract sku (standardized field name) with backward compatibility
   const products = useMemo(
     () =>
-      (rawItems || []).map((item) => ({
-        product: item.product,
-        quantity: item.quantity,
-        variant: item.variant,
-      })),
+      (rawItems || []).map((item) => {
+        // CRITICAL: Extract sku (standardized field name) with backward compatibility
+        let sku = item.sku || item.variantSku || null;
+        
+        // Backward compatibility: If sku missing, try to resolve from variant
+        if (!sku && item.variant) {
+          // Case 1: variant object with SKU
+          if (typeof item.variant === 'object' && item.variant !== null && item.variant.sku) {
+            sku = item.variant.sku.trim().toUpperCase();
+          }
+          // Case 2: variant ID - resolve from product variants
+          else if (Array.isArray(item.product?.variants)) {
+            const variantId = typeof item.variant === 'string' 
+              ? item.variant 
+              : (item.variant._id?.toString ? item.variant._id.toString() : String(item.variant._id || item.variant));
+            
+            if (variantId) {
+              const found = item.product.variants.find(
+                (v) => {
+                  const vId = v._id?.toString ? v._id.toString() : String(v._id);
+                  return vId === variantId;
+                }
+              );
+              if (found?.sku) {
+                sku = found.sku.trim().toUpperCase();
+              }
+            }
+          }
+        }
+        
+        // Case 3: variantId field (backward compatibility)
+        if (!sku && item.variantId && Array.isArray(item.product?.variants)) {
+          const found = item.product.variants.find(
+            (v) => {
+              const vId = v._id?.toString ? v._id.toString() : String(v._id);
+              const searchId = item.variantId.toString ? item.variantId.toString() : String(item.variantId);
+              return vId === searchId;
+            }
+          );
+          if (found?.sku) {
+            sku = found.sku.trim().toUpperCase();
+          }
+        }
+        
+        // Case 4: Single-variant product auto-assignment
+        if (!sku && Array.isArray(item.product?.variants) && item.product.variants.length === 1) {
+          const variantSku = item.product.variants[0].sku;
+          if (variantSku) {
+            sku = variantSku.trim().toUpperCase();
+          }
+        }
+
+        return {
+          product: item.product,
+          quantity: item.quantity,
+          sku: sku, // Standardized field name - SKU is the unit of commerce
+        };
+      }),
     [rawItems]
   );
 
@@ -263,7 +401,20 @@ const CheckoutScreen = () => {
 
   const hasInsufficientBalance = useMemo(() => {
     if (paymentMethod !== 'credit_balance') return false;
-    return creditBalance < total;
+    const isInsufficient = creditBalance < total;
+    
+    // DEBUG: Log balance check details
+    if (__DEV__) {
+      console.log('[CheckoutScreen] 💰 Balance check:', {
+        creditBalance,
+        total,
+        isInsufficient,
+        shortfall: total - creditBalance,
+        paymentMethod,
+      });
+    }
+    
+    return isInsufficient;
   }, [paymentMethod, creditBalance, total]);
 
   const shippingItems = useMemo(
@@ -575,13 +726,26 @@ const CheckoutScreen = () => {
   };
 
   const handlePlaceOrder = () => {
+    console.log('[CheckoutScreen] 🔘 Place Order button clicked');
+    console.log('[CheckoutScreen] Products:', products?.length || 0);
+    console.log('[CheckoutScreen] Selected Address ID:', selectedAddressId);
+    console.log('[CheckoutScreen] Active Tab:', activeTab);
+    console.log('[CheckoutScreen] Delivery Method:', deliveryMethod);
+    console.log('[CheckoutScreen] Selected Pickup Center ID:', selectedPickupCenterId);
+    console.log('[CheckoutScreen] Is Creating Order:', isCreatingOrder);
+    console.log('[CheckoutScreen] Has Insufficient Balance:', hasInsufficientBalance);
+
     if (!products || !Array.isArray(products) || products.length === 0) {
+      console.log('[CheckoutScreen] ❌ Validation failed: No products in cart');
       setFormError('Please add items to cart');
+      Alert.alert('Error', 'Please add items to cart');
       return;
     }
 
     if (!selectedAddressId && activeTab === 'existing') {
+      console.log('[CheckoutScreen] ❌ Validation failed: No address selected');
       setFormError('Please select a shipping address');
+      Alert.alert('Error', 'Please select a shipping address');
       return;
     }
 
@@ -589,40 +753,75 @@ const CheckoutScreen = () => {
       activeTab === 'new' &&
       (!newAddress.city || !newAddress.streetAddress)
     ) {
+      console.log('[CheckoutScreen] ❌ Validation failed: Incomplete address form');
       setFormError('Please complete the shipping address form');
+      Alert.alert('Error', 'Please complete the shipping address form');
       return;
     }
 
     if (deliveryMethod === 'pickup_center' && !selectedPickupCenterId) {
+      console.log('[CheckoutScreen] ❌ Validation failed: No pickup center selected');
       setFormError('Please select a pickup center');
+      Alert.alert('Error', 'Please select a pickup center');
       return;
     }
 
+    console.log('[CheckoutScreen] ✅ All validations passed, proceeding with order creation...');
+
     setFormError('');
 
-    const orderItems = products.map((product) => {
+    // CRITICAL: Use variantSku directly from cart items - NO resolution logic
+    let orderItems;
+    try {
+      orderItems = products.map((product) => {
+        const validatedQuantity = validateQuantity(product.quantity, product.product.stock || 999);
 
-      const validatedQuantity = validateQuantity(product.quantity, product.product.stock || 999);
+        // CRITICAL: Use sku directly from cart item - NO resolution
+        const sku = product.sku || null;
+        
+        // Guardrail: If product has variants and SKU is missing, show error
+        const hasVariants = product.product.variants && product.product.variants.length > 0;
+        if (hasVariants && !sku) {
+          console.error('[CheckoutScreen] ❌ SKU missing for variant product:', {
+            productId: product.product._id,
+            productName: product.product.name,
+            variantCount: product.product.variants.length,
+          });
+          throw new Error(`Please re-select product options for "${product.product.name}" before checkout`);
+        }
 
-      const displayPrice = product.product.variants?.find(
-        (v) => v._id === product.variant || v._id?.toString() === product.variant?.toString()
-      )?.price || product.product.defaultPrice || product.product.price || 0;
+        return {
+          product: product.product._id,
+          quantity: validatedQuantity,
+          sku: sku || undefined, // Only include SKU if it exists
+        };
+      });
 
-      if (!displayPrice || displayPrice === 0) {
-        console.warn('Product price not found (backend will fetch):', {
-          productId: product.product._id,
-          productName: product.product.name,
-          variant: product.variant,
-        });
+      // CRITICAL: Final validation - ensure all variant products have SKU
+      const missingSkuItems = orderItems.filter((item, index) => {
+        const product = products[index];
+        const hasVariants = product?.product?.variants && product.product.variants.length > 0;
+        return hasVariants && !item.sku;
+      });
+      
+      if (missingSkuItems.length > 0) {
+        console.error('[CheckoutScreen] ❌ CRITICAL: Order items missing SKU for variant products:', missingSkuItems);
+        const productNames = missingSkuItems.map((_, index) => {
+          const product = products[orderItems.indexOf(missingSkuItems[index])];
+          return product?.product?.name || 'Unknown product';
+        }).join(', ');
+        throw new Error(`Please re-select product options for: ${productNames}`);
       }
 
-      return {
-        product: product.product._id,
-        quantity: validatedQuantity, 
-
-        variant: product.variant,
-      };
-    });
+      // Log final order payload
+      console.log('[CheckoutScreen] Order Items (SKU-based contract):', JSON.stringify(orderItems, null, 2));
+    } catch (skuError) {
+      console.error('[CheckoutScreen] ❌ SKU validation error:', skuError);
+      const errorMessage = skuError.message || 'Please re-select product options before checkout';
+      setFormError(errorMessage);
+      Alert.alert('Error', errorMessage);
+      return;
+    }
 
     const orderData = {
       address: selectedAddressId,
@@ -690,8 +889,8 @@ const CheckoutScreen = () => {
         console.log('[CheckoutScreen] Current User ID:', user?._id || user?.id);
         console.log('[CheckoutScreen] Do they match?', (order.user?._id || order.user?.id || order.user) === (user?._id || user?.id));
 
-        clearCart();
-        queryClient.invalidateQueries({ queryKey: ['cart'] });
+        // NOTE: Cart will be cleared after order confirmation (in OrderCompleteScreen)
+        // This ensures cart is only cleared after payment is verified
 
         if (paymentMethod === 'mobile_money') {
           try {
@@ -719,12 +918,18 @@ const CheckoutScreen = () => {
             }
 
             const paymentOrderId = order._id || order.id || order.orderId;
-            const paymentAmount = order.totalPrice || order.total || order.totalAmount || order.amount;
+            
+            // CRITICAL: Backend uses order.totalPrice as the source of truth
+            // We MUST use order.totalPrice to match backend validation
+            // If totalPrice is missing, don't send amount (backend will use order.totalPrice)
+            const paymentAmount = order.totalPrice !== undefined && order.totalPrice !== null 
+              ? parseFloat(order.totalPrice) 
+              : null;
 
             const paymentEmail = 
-              order.user?.email 
-              (typeof order.user === 'string' ? null : null) 
-              user?.email 
+              order.user?.email ||
+              (typeof order.user === 'string' ? null : null) ||
+              user?.email ||
               user?.user?.email;
 
             console.log('[CheckoutScreen] 🔍 Payment details extraction:');
@@ -732,8 +937,10 @@ const CheckoutScreen = () => {
             console.log('[CheckoutScreen] Payment details:', {
               orderId: paymentOrderId,
               amount: paymentAmount,
-              email: paymentEmail,
+              orderTotalPrice: order.totalPrice,
+              orderTotalPriceType: typeof order.totalPrice,
               orderKeys: Object.keys(order),
+              email: paymentEmail,
               orderUser: order.user,
               orderUserType: typeof order.user,
               currentUser: user,
@@ -742,7 +949,7 @@ const CheckoutScreen = () => {
 
             if (!paymentOrderId) {
               console.error('[CheckoutScreen] ❌ Order ID is missing!');
-              console.error('[CheckoutScreen] Order object:', order);
+              console.error('[CheckoutScreen] Order object:', order ? JSON.stringify(order, null, 2) : 'Order is undefined');
               Alert.alert(
                 'Payment Error',
                 'Order ID is missing. Please try placing the order again.',
@@ -752,22 +959,28 @@ const CheckoutScreen = () => {
               return;
             }
 
-            if (paymentAmount === undefined || paymentAmount === null) {
-              console.error('[CheckoutScreen] ❌ Order amount is missing!');
-              console.error('[CheckoutScreen] Order object:', order);
+            // Note: amount is optional - backend will use order.totalPrice if not provided
+            // But we log a warning if totalPrice is missing for debugging
+            if (paymentAmount === null) {
+              console.warn('[CheckoutScreen] ⚠️ Order totalPrice is missing - backend will use order.totalPrice');
+              console.warn('[CheckoutScreen] Order object:', order ? JSON.stringify(order, null, 2) : 'Order is undefined');
+              // Don't block payment - backend will handle it
+            } else if (paymentAmount <= 0) {
+              console.error('[CheckoutScreen] ❌ Order amount is invalid (<= 0)!');
+              console.error('[CheckoutScreen] Order totalPrice:', order?.totalPrice);
               Alert.alert(
                 'Payment Error',
-                'Order amount is missing. Please try placing the order again.',
+                'Order amount is invalid. Please try placing the order again.',
                 [{ text: 'OK' }]
               );
-              setFormError('Order amount is missing. Please try again.');
+              setFormError('Order amount is invalid. Please try again.');
               return;
             }
 
             if (!paymentEmail || paymentEmail.trim() === '') {
               console.error('[CheckoutScreen] ❌ Email is missing!');
-              console.error('[CheckoutScreen] Order user:', order.user);
-              console.error('[CheckoutScreen] Current user:', user);
+              console.error('[CheckoutScreen] Order user:', order?.user ? JSON.stringify(order.user, null, 2) : 'Order user is undefined');
+              console.error('[CheckoutScreen] Current user:', user ? JSON.stringify(user, null, 2) : 'Current user is undefined');
               Alert.alert(
                 'Payment Error',
                 'Email address is required for payment. Please ensure your account has an email address.',
@@ -785,16 +998,25 @@ const CheckoutScreen = () => {
 
             console.log('[CheckoutScreen] 🔍 About to call initializePaystackPayment with:');
             console.log('[CheckoutScreen]   orderId:', paymentOrderId);
-            console.log('[CheckoutScreen]   amount:', paymentAmount);
+            console.log('[CheckoutScreen]   amount:', paymentAmount, '(type:', typeof paymentAmount, ')');
             console.log('[CheckoutScreen]   email:', paymentEmail);
 
             let paymentResult;
             try {
-              paymentResult = await initializePaystackPayment({
+              // Build payment payload - amount is optional, backend will use order.totalPrice
+              const paymentPayload = {
                 orderId: paymentOrderId,
-                amount: paymentAmount,
                 email: paymentEmail,
-              });
+              };
+              
+              // Only include amount if we have order.totalPrice (to match backend validation)
+              if (paymentAmount !== null && paymentAmount > 0) {
+                paymentPayload.amount = paymentAmount;
+              }
+              
+              console.log('[CheckoutScreen] Payment payload:', paymentPayload);
+              
+              paymentResult = await initializePaystackPayment(paymentPayload);
               console.log('[CheckoutScreen] ✅ Payment initialization successful');
               console.log('[CheckoutScreen] 🔍 Payment result:', paymentResult);
               console.log('[CheckoutScreen] Payment result type:', typeof paymentResult);
@@ -818,8 +1040,8 @@ const CheckoutScreen = () => {
             const redirectTo = 
               paymentResult?.redirectTo ||
               paymentResult?.authorizationUrl ||
-              paymentResult?.authorization_url 
-              paymentResult?.data?.authorization_url 
+              paymentResult?.authorization_url ||
+              paymentResult?.data?.authorization_url ||
               paymentResult?.data?.authorizationUrl;
 
             console.log('[CheckoutScreen] 🔍 Extracted redirect URL:');
@@ -842,8 +1064,8 @@ const CheckoutScreen = () => {
             try {
               const url = new URL(redirectTo);
               const isValidPaystack =
-                url.hostname === 'paystack.com' 
-                url.hostname.endsWith('.paystack.com') 
+                url.hostname === 'paystack.com' ||
+                url.hostname.endsWith('.paystack.com') ||
                 url.hostname === 'checkout.paystack.com';
 
               if (!isValidPaystack) {
@@ -860,10 +1082,15 @@ const CheckoutScreen = () => {
               return;
             }
 
+            // Use order.totalPrice to match backend (same as payment initialization)
+            const webViewAmount = order.totalPrice !== undefined && order.totalPrice !== null 
+              ? parseFloat(order.totalPrice) 
+              : 0;
+            
             console.log('[CheckoutScreen] Navigating to PaystackWebView with:', {
               authorizationUrl: redirectTo,
               orderId: order._id,
-              amount: order.totalPrice || order.total || 0,
+              amount: webViewAmount,
               email: order.user?.email || user?.email || '',
             });
 
@@ -871,7 +1098,7 @@ const CheckoutScreen = () => {
               navigation.navigate('PaystackWebView', {
                 authorizationUrl: redirectTo,
                 orderId: order._id,
-                amount: order.totalPrice || order.total || 0,
+                amount: webViewAmount,
                 email: order.user?.email || user?.email || '',
               });
               console.log('[CheckoutScreen] ✅ Navigation to PaystackWebView completed');
@@ -886,8 +1113,8 @@ const CheckoutScreen = () => {
           } catch (paymentError) {
             console.error('[CheckoutScreen] Payment initialization error:', paymentError);
             const errorMessage =
-              paymentError.response?.data?.message 
-                paymentError.message 
+              paymentError.response?.data?.message ||
+              paymentError.message ||
               'Failed to initialize payment. Please try again.';
 
             console.error('[CheckoutScreen] Error details:', {
@@ -904,6 +1131,11 @@ const CheckoutScreen = () => {
             setFormError(errorMessage);
           }
         } else if (paymentMethod === 'credit_balance') {
+          // CRITICAL: Invalidate wallet balance immediately for UI update
+          console.log('[CheckoutScreen] 💰 Credit balance payment - invalidating wallet balance');
+          queryClient.invalidateQueries({ queryKey: ["wallet-balance"] });
+          queryClient.invalidateQueries({ queryKey: ["creditBalance"] });
+          queryClient.refetchQueries({ queryKey: ["wallet-balance"] });
 
           console.log('[CheckoutScreen] Credit balance payment - navigating to order confirmation');
           navigation.navigate('OrderComplete', {
@@ -934,10 +1166,55 @@ const CheckoutScreen = () => {
         }
       },
       onError: (error) => {
-        console.error('Order creation error:', error);
-        setFormError(
-          error.response?.data?.message || 'Failed to place order'
-        );
+        console.error('[CheckoutScreen] ❌ Order creation error:', {
+          message: error.message,
+          response: error.response?.data,
+          status: error.response?.status,
+          statusText: error.response?.statusText,
+          isAxiosError: error.isAxiosError,
+          code: error.code,
+          stack: error.stack,
+        });
+        
+        // Extract error message from various possible locations
+        let errorMessage = 'Failed to place order';
+        
+        if (error.response?.data) {
+          // Backend error response
+          errorMessage = 
+            error.response.data.message ||
+            error.response.data.error ||
+            error.response.data.errors?.map(e => e.message || e).join(', ') ||
+            `Server error: ${error.response.status} ${error.response.statusText}`;
+        } else if (error.request) {
+          // Network error - request made but no response
+          errorMessage = 'Network error. Please check your internet connection and try again.';
+        } else if (error.message) {
+          // Other error
+          errorMessage = error.message;
+        }
+        
+        // Show user-friendly error message
+        setFormError(errorMessage);
+        
+        // Also show alert for critical errors
+        if (error.response?.status >= 500) {
+          Alert.alert(
+            'Server Error',
+            'There was a problem with our servers. Please try again in a moment.',
+            [{ text: 'OK' }]
+          );
+        } else if (error.response?.status === 400) {
+          // Validation errors - already shown in formError
+          console.log('[CheckoutScreen] Validation error details:', error.response?.data);
+        } else if (!error.response) {
+          // Network error
+          Alert.alert(
+            'Connection Error',
+            'Unable to connect to the server. Please check your internet connection.',
+            [{ text: 'OK' }]
+          );
+        }
       },
     });
   };
@@ -971,7 +1248,16 @@ const CheckoutScreen = () => {
     }
   };
 
-  const renderCheckoutButton = () => (
+  const renderCheckoutButton = () => {
+    const isDisabled = isCreatingOrder || hasInsufficientBalance;
+    console.log('[CheckoutScreen] 🔘 Rendering checkout button:', {
+      isDisabled,
+      isCreatingOrder,
+      hasInsufficientBalance,
+      paymentMethod,
+    });
+    
+    return (
     <AppButton
       title={
         isCreatingOrder
@@ -985,21 +1271,25 @@ const CheckoutScreen = () => {
               : 'Place Order'
       }
       variant="primary"
-      size="lg"
-      onPress={handlePlaceOrder}
-      disabled={isCreatingOrder || hasInsufficientBalance}
+        size="sm"
+        onPress={() => {
+          console.log('[CheckoutScreen] 🔘 Button onPress triggered');
+          handlePlaceOrder();
+        }}
+        disabled={isDisabled}
       loading={isCreatingOrder}
       fullWidth
     />
   );
+  };
 
   return (
     <View style={styles.container}>
-      <SafeAreaView style={styles.safeArea} edges={['top']}>
+      <SafeAreaView style={styles.safeArea} edges={[]}>
 
         {showStickyButton && (
           <View style={styles.stickyHeader}>
-            <SafeAreaView edges={['top']} style={styles.stickyHeaderSafeArea}>
+            <SafeAreaView edges={[]} style={styles.stickyHeaderSafeArea}>
               <View style={styles.stickyHeaderContent}>
                 <View style={styles.stickyHeaderInfo}>
                   <Text style={styles.stickyHeaderTotalLabel}>Total</Text>
@@ -1020,7 +1310,7 @@ const CheckoutScreen = () => {
         <ScrollView
           ref={scrollViewRef}
           style={styles.scrollView}
-          contentContainerStyle={[styles.scrollContent, { paddingBottom: 100 }]}
+          contentContainerStyle={[{ paddingTop: 0, paddingBottom: 100 }]}
           showsVerticalScrollIndicator={false}
           onScroll={handleScroll}
           onScrollEndDrag={handleScrollEnd}
@@ -1028,7 +1318,7 @@ const CheckoutScreen = () => {
           scrollEventThrottle={16}
         >
 
-          <CheckoutSection title="Shipping Information">
+          <CheckoutSection title="Shipping Information" style={{ marginTop: 0 }}>
 
             <View style={styles.tabContainer}>
               <TouchableOpacity
@@ -1553,7 +1843,6 @@ const CheckoutScreen = () => {
                       setCouponMessage('');
                       setDiscount(0);
                       setCouponData(null);
-                      setCouponError(null);
                     }}
                     style={styles.removeCouponButton}
                   >
@@ -1715,7 +2004,9 @@ const CheckoutScreen = () => {
       </KeyboardAvoidingView>
       </SafeAreaView>
 
-      <View style={[styles.stickyBottomContainer, { paddingBottom: Math.max(insets.bottom, 10) }]}>
+      {/* Bottom sticky button - hidden when top sticky button is visible to avoid redundancy */}
+      {!showStickyButton && (
+        <View style={[styles.stickyBottomContainer, { paddingBottom: Math.max(insets.bottom, 5) }]}>
         <View style={styles.stickyBottomContent}>
           <View style={styles.stickyBottomInfo}>
             <Text style={styles.stickyBottomTotalLabel}>Total</Text>
@@ -1726,6 +2017,7 @@ const CheckoutScreen = () => {
           </View>
         </View>
       </View>
+      )}
     </View>
   );
 };
@@ -1966,6 +2258,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     position: 'relative',
+  
   },
   scrollContainer: {
     flex: 1,
@@ -2489,23 +2782,23 @@ const styles = StyleSheet.create({
     ...theme.shadows.lg,
   },
   stickyHeaderContent: {
-    paddingHorizontal: theme.spacing.lg,
-    paddingVertical: theme.spacing.md,
-    gap: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.xs,
+    paddingVertical: 0,
+    gap: 0,
   },
   stickyHeaderInfo: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: theme.spacing.xs,
+    marginBottom: 0,
   },
   stickyHeaderTotalLabel: {
-    fontSize: theme.typography.fontSize.md,
+    fontSize: theme.typography.fontSize.xs,
     fontWeight: theme.typography.fontWeight.semibold,
     color: theme.colors.grey700,
   },
   stickyHeaderTotalValue: {
-    fontSize: theme.typography.fontSize.xl,
+    fontSize: theme.typography.fontSize.sm,
     fontWeight: theme.typography.fontWeight.bold,
     color: theme.colors.primary700,
   },
@@ -2518,8 +2811,8 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     width: '100%',
-    zIndex: 10000,
-    elevation: 25, 
+    zIndex: 99999,
+    elevation: 50, 
     backgroundColor: theme.colors.white,
     borderTopWidth: 1,
     borderTopColor: theme.colors.grey200,
@@ -2527,13 +2820,12 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: -2 },
     shadowOpacity: 0.1,
     shadowRadius: 8,
-
-    marginBottom: 80,
+    marginBottom: 60,
   },
   stickyBottomContent: {
-    paddingHorizontal: theme.spacing.lg,
-    paddingVertical: theme.spacing.sm,
-    gap: theme.spacing.xs,
+    paddingHorizontal: theme.spacing.xs,
+    paddingVertical: 0,
+    gap: 0,
   },
   stickyBottomInfo: {
     flexDirection: 'row',
@@ -2542,12 +2834,12 @@ const styles = StyleSheet.create({
     marginBottom: 0,
   },
   stickyBottomTotalLabel: {
-    fontSize: theme.typography.fontSize.md,
+    fontSize: theme.typography.fontSize.xs,
     fontWeight: theme.typography.fontWeight.semibold,
     color: theme.colors.grey700,
   },
   stickyBottomTotalValue: {
-    fontSize: theme.typography.fontSize.xl,
+    fontSize: theme.typography.fontSize.sm,
     fontWeight: theme.typography.fontWeight.bold,
     color: theme.colors.primary700,
   },

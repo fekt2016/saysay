@@ -17,7 +17,19 @@ import { useGetOrderById } from '../../hooks/useOrder';
 import { theme } from '../../theme';
 
 const OrderDetailScreen = ({ route, navigation }) => {
-  const { orderId } = route.params;
+  const { orderId } = route?.params || {};
+  
+  // Guard against missing orderId
+  if (!orderId) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+        <Text style={{ fontSize: 16, color: theme.colors.error }}>
+          Order ID is missing. Please go back and try again.
+        </Text>
+      </View>
+    );
+  }
+  
   const { data: orderData, isLoading, isError, refetch } = useGetOrderById(orderId);
 
   const order = useMemo(() => {
@@ -193,7 +205,7 @@ const OrderDetailScreen = ({ route, navigation }) => {
             <Ionicons name="cube-outline" size={18} color={theme.colors.textPrimary} />
             <Text style={styles.sectionTitle}>Order Items</Text>
           </View>
-          {(order.orderItems || order.items || [])?.map((item, index) => (
+          {((order?.orderItems || order?.items || []) || []).map((item, index) => (
             <View key={index} style={styles.orderItem}>
               <Image
                 source={{ uri: item.product?.imageCover || item.product?.images?.[0] }}
@@ -206,7 +218,7 @@ const OrderDetailScreen = ({ route, navigation }) => {
                 </Text>
                 {item.variant && (
                   <Text style={styles.itemVariant}>
-                    {item.variant.attributes?.map(attr => attr.value).join(', ')}
+                    {(item.variant.attributes || []).map(attr => attr?.value).filter(Boolean).join(', ')}
                   </Text>
                 )}
                 <Text style={styles.itemPrice}>

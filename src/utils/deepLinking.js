@@ -1,5 +1,9 @@
+import logger from './logger';
+
 export const parseDeepLink = (url) => {
-  console.log('[DeepLinking] Parsing URL:', url);
+  if (typeof __DEV__ !== 'undefined' && __DEV__) {
+    logger.debug('[DeepLinking] Parsing URL:', url);
+  }
 
   try {
     let parsedUrl;
@@ -8,7 +12,6 @@ export const parseDeepLink = (url) => {
       const urlWithoutScheme = url.replace('saysay://', '');
       parsedUrl = new URL(`https://${urlWithoutScheme}`);
     } else {
-
       parsedUrl = new URL(url);
     }
 
@@ -77,7 +80,7 @@ export const parseDeepLink = (url) => {
 
     return null;
   } catch (error) {
-    console.error('[DeepLinking] Error parsing URL:', error);
+    logger.error('[DeepLinking] Error parsing URL:', error);
     return null;
   }
 };

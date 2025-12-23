@@ -9,6 +9,11 @@ import logger from '../utils/logger';
 
 const EXPO_PROJECT_ID = Constants.expoConfig?.extra?.eas?.projectId || Constants.easConfig?.projectId;
 
+// Check if running in Expo Go (SDK 53+ removed Android push notifications from Expo Go)
+// Expo Go has executionEnvironment === 'storeClient' or appOwnership === 'expo'
+const isExpoGo = Constants?.executionEnvironment === 'storeClient' || 
+                 (Constants?.appOwnership === 'expo' && !Constants?.expoConfig?.extra?.eas?.projectId);
+
 export const usePushNotifications = () => {
   const { user, isAuthenticated } = useAuth();
   const [expoPushToken, setExpoPushToken] = useState(null);
@@ -152,9 +157,15 @@ export const usePushNotifications = () => {
 
     }
   };const registerForPushNotificationsAsync = async () => {
+    // SDK 53+: Android push notifications are not available in Expo Go
+    if (Platform.OS === 'android' && isExpoGo) {
+      logger.warn('[PushNotifications] ⚠️ Android push notifications are not available in Expo Go (SDK 53+)');
+      logger.warn('[PushNotifications] ⚠️ Use a development build instead: https://docs.expo.dev/development/introduction/');
+      logger.warn('[PushNotifications] ⚠️ Run: npx expo install expo-dev-client && npx expo run:android');
+      return null;
+    }
 
     if (!Device.isDevice) {
-
       logger.debug('[PushNotifications] ℹ️ Running on emulator/simulator - push notifications require a physical device');
       logger.debug('[PushNotifications] ℹ️ This is normal and expected. Push notifications will work on physical devices.');
       return null;
@@ -211,11 +222,17 @@ export const usePushNotifications = () => {
       }
       return token.data;
     } catch (error) {
-      logger.error('[PushNotifications] ❌ Error getting push token:', {
-        error: error.message,
-        code: error.code,
-        details: error.details,
-      });
+      // Handle Expo Go Android push notification limitation (SDK 53+)
+      if (Platform.OS === 'android' && isExpoGo) {
+        logger.warn('[PushNotifications] ⚠️ Android push notifications not available in Expo Go (SDK 53+)');
+        logger.warn('[PushNotifications] ⚠️ Use development build: npx expo install expo-dev-client && npx expo run:android');
+      } else {
+        logger.error('[PushNotifications] ❌ Error getting push token:', {
+          error: error.message,
+          code: error.code,
+          details: error.details,
+        });
+      }
       return null;
     }
   };const unregisterDeviceToken = async () => {

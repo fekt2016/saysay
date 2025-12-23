@@ -1,19 +1,11 @@
-/*
- 🔒 FILE TEMPORARILY DISABLED FOR FORENSIC DEBUGGING
- Original file: src/config/appConfig.js
- Disabled on: 2025-12-16T23:05:52.321Z
- 
-/*
- 🔒 FILE TEMPORARILY DISABLED FOR FORENSIC DEBUGGING
- Original file: src/config/appConfig.js
- Disabled on: Tue Dec 16 23:05:04 GMT 2025
-
 /**
  * App Configuration
  * 
  * Centralized app configuration values
  * Update these values for app-wide settings
  */
+
+import logger from '../utils/logger';
 
 let Constants;
 try {
@@ -46,8 +38,8 @@ const getProjectIdFromConfig = () => {
     }
     // Invalid UUID format - return undefined to avoid error
     // Only warn in development (this is a config issue, not a runtime error)
-    if (__DEV__) {
-      console.warn('[appConfig] Invalid projectId format in app.json, using undefined (Expo Go default)');
+    if (typeof __DEV__ !== 'undefined' && __DEV__) {
+      logger.warn('[appConfig] Invalid projectId format in app.json, using undefined (Expo Go default)');
     }
     return undefined;
   }
@@ -58,7 +50,7 @@ const getProjectIdFromConfig = () => {
 
 export const EXPO_PROJECT_ID = getProjectIdFromConfig();
 
-export const APP_ENV = process.env.NODE_ENV || __DEV__ ? 'development' : 'production';
+export const APP_ENV = process.env.NODE_ENV || (typeof __DEV__ !== 'undefined' && __DEV__) ? 'development' : 'production';
 
 export const APP_VERSION = '1.0.0';
 
@@ -67,8 +59,3 @@ export default {
   APP_ENV,
   APP_VERSION,
 };
-
-
-*/
-
-*/

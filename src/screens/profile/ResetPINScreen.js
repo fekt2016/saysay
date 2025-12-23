@@ -21,14 +21,16 @@ import AppInput from '../../components/AppInput';
 import AppButton from '../../components/AppButton';
 import LogoIcon from '../../components/header/LogoIcon';
 
-import { theme } from '../../theme';const ResetPINScreen = ({ navigation }) => {
+import { theme } from '../../theme';
+
+const ResetPINScreen = ({ navigation }) => {
   const { mutate: resetPin, isPending } = useResetPin();
   const { user } = useAuth();
   const { profileData, refetchAuth } = useAuthHook();
 
   const hasPin = 
-    user?.securitySettings?.hasPin === true 
-    profileData?.securitySettings?.hasPin === true 
+    user?.securitySettings?.hasPin === true ||
+    profileData?.securitySettings?.hasPin === true ||
     false;
 
   useFocusEffect(
@@ -42,7 +44,7 @@ import { theme } from '../../theme';const ResetPINScreen = ({ navigation }) => {
     newPin: '',
     confirmPin: '',
   });
-  const [errors, setErrors] = useState();
+  const [errors, setErrors] = useState({});
 
   const PIN_LENGTH = 4;
 
@@ -115,7 +117,7 @@ import { theme } from '../../theme';const ResetPINScreen = ({ navigation }) => {
                   newPin: '',
                   confirmPin: '',
                 });
-                setErrors();
+                setErrors({});
 
                 refetchAuth();
 
@@ -162,7 +164,7 @@ import { theme } from '../../theme';const ResetPINScreen = ({ navigation }) => {
 
     setFormData((prev) => ({ ...prev, [field]: limitedValue }));
 
-    if (errors[field]) {
+    if (errors && errors[field]) {
       setErrors((prev) => ({ ...prev, [field]: null }));
     }
   };
